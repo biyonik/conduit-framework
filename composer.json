@@ -1,0 +1,77 @@
+{
+  "name": "conduit/framework",
+  "description": "Production-ready, API-first PHP framework for shared hosting",
+  "type": "project",
+  "keywords": [
+    "framework",
+    "api",
+    "rest",
+    "php",
+    "shared-hosting",
+    "psr-7",
+    "psr-11",
+    "psr-16"
+  ],
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Your Name",
+      "email": "your.email@example.com"
+    }
+  ],
+  "require": {
+    "php": "^8.0",
+    "ext-pdo": "*",
+    "ext-json": "*",
+    "ext-mbstring": "*",
+    "ext-openssl": "*",
+    "ext-fileinfo": "*"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^9.5",
+    "mockery/mockery": "^1.5",
+    "fakerphp/faker": "^1.20"
+  },
+  "autoload": {
+    "psr-4": {
+      "Conduit\\": "src/",
+      "App\\": "app/"
+    },
+    "files": [
+      "src/Support/helpers.php"
+    ]
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Tests\\": "tests/"
+    }
+  },
+  "scripts": {
+    "test": "phpunit",
+    "test-coverage": "phpunit --coverage-html coverage",
+    "serve": "php -S localhost:8000 -t public",
+    "cache:clear": "php conduit cache:clear",
+    "migrate": "php conduit migrate",
+    "migrate:rollback": "php conduit migrate:rollback",
+    "migrate:fresh": "php conduit migrate:fresh"
+  },
+  "scripts-descriptions": {
+    "test": "Run unit tests",
+    "test-coverage": "Run tests with coverage report",
+    "serve": "Start PHP development server",
+    "cache:clear": "Clear all cached data",
+    "migrate": "Run database migrations",
+    "migrate:rollback": "Rollback last migration",
+    "migrate:fresh": "Drop all tables and re-run migrations"
+  },
+  "config": {
+    "optimize-autoloader": true,
+    "preferred-install": "dist",
+    "sort-packages": true,
+    "allow-plugins": {
+      "php-http/discovery": true
+    }
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
+}

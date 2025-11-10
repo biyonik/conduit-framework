@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/9.5/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+         verbose="true"
+         failOnWarning="true"
+         failOnRisky="true"
+         stopOnFailure="false"
+         executionOrder="random"
+         resolveDependencies="true">
+
+    <!-- Test Suites -->
+    <testsuites>
+        <testsuite name="Unit">
+            <directory suffix="Test.php">./tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory suffix="Test.php">./tests/Feature</directory>
+        </testsuite>
+        <testsuite name="Integration">
+            <directory suffix="Test.php">./tests/Integration</directory>
+        </testsuite>
+    </testsuites>
+
+    <!-- Coverage -->
+    <coverage processUncoveredFiles="true">
+        <include>
+            <directory suffix=".php">./src</directory>
+            <directory suffix=".php">./app</directory>
+        </include>
+        <exclude>
+            <directory suffix=".php">./src/Support/helpers.php</directory>
+            <directory>./src/Exceptions</directory>
+        </exclude>
+        <report>
+            <html outputDirectory="coverage" lowUpperBound="50" highLowerBound="80"/>
+            <text outputFile="php://stdout" showOnlySummary="true"/>
+        </report>
+    </coverage>
+
+    <!-- PHP Settings -->
+    <php>
+        <!-- Application Environment -->
+        <env name="APP_ENV" value="testing"/>
+        <env name="APP_DEBUG" value="true"/>
+        <env name="APP_KEY" value="base64:TEST_KEY_FOR_TESTING_ONLY"/>
+
+        <!-- Database -->
+        <env name="DB_CONNECTION" value="sqlite"/>
+        <env name="DB_DATABASE" value=":memory:"/>
+
+        <!-- Cache -->
+        <env name="CACHE_DRIVER" value="array"/>
+
+        <!-- Session -->
+        <env name="SESSION_DRIVER" value="array"/>
+
+        <!-- Disable External Services -->
+        <env name="MAIL_DRIVER" value="array"/>
+
+        <!-- Testing Flags -->
+        <server name="APP_ENV" value="testing"/>
+    </php>
+
+    <!-- Logging -->
+    <logging>
+        <testdoxHtml outputFile="tests/_reports/testdox.html"/>
+        <testdoxText outputFile="tests/_reports/testdox.txt"/>
+        <junit outputFile="tests/_reports/junit.xml"/>
+    </logging>
+
+</phpunit>

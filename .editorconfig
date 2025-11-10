@@ -1,0 +1,75 @@
+# ============================================
+# EditorConfig - Coding Style Definitions
+# https://editorconfig.org
+# ============================================
+# Top-most EditorConfig file
+root = true
+
+# ============================================
+# All Files
+# ============================================
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# ============================================
+# PHP Files
+# ============================================
+[*.php]
+indent_style = space
+indent_size = 4
+max_line_length = 120
+
+# ============================================
+# JSON & YAML
+# ============================================
+[*.{json,yaml,yml}]
+indent_style = space
+indent_size = 2
+
+# ============================================
+# Markdown
+# ============================================
+[*.md]
+trim_trailing_whitespace = false
+max_line_length = off
+
+# ============================================
+# Makefile
+# ============================================
+[Makefile]
+indent_style = tab
+
+# ============================================
+# Shell Scripts
+# ============================================
+[*.sh]
+indent_style = space
+indent_size = 2
+end_of_line = lf
+
+# ============================================
+# XML & HTML
+# ============================================
+[*.{xml,html,htm}]
+indent_style = space
+indent_size = 2
+
+# ============================================
+# CSS, SCSS, LESS
+# ============================================
+[*.{css,scss,less}]
+indent_style = space
+indent_size = 2
+
+# ============================================
+# JavaScript & TypeScript
+# ============================================
+[*.{js,ts,jsx,tsx}]
+indent_style = space
+indent_size = 2
+quote_type = single
