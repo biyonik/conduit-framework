@@ -21,11 +21,12 @@
   ],
   "require": {
     "php": "^8.0",
-    "ext-pdo": "*",
+    "ext-fileinfo": "*",
     "ext-json": "*",
     "ext-mbstring": "*",
     "ext-openssl": "*",
-    "ext-fileinfo": "*"
+    "ext-pdo": "*",
+    "psr/http-message": "^2.0"
   },
   "require-dev": {
     "phpunit/phpunit": "^9.5",
