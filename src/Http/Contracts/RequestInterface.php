@@ -17,177 +17,211 @@ use Psr\Http\Message\ServerRequestInterface;
 interface RequestInterface extends ServerRequestInterface
 {
     /**
-     * Herhangi bir input değerini al (query/post/json/route param)
-     * Priority: route params > query > post > json
-     * 
-     * @param string|null $key Anahtar, null ise tüm input
-     * @param mixed $default Varsayılan değer
-     * @return mixed
-     */
-    public function input(?string $key = null, mixed $default = null): mixed;
-
-    /**
-     * Tüm input verisini al (query + post + json + route params)
-     * 
-     * @return array
-     */
-    public function all(): array;
-
-    /**
-     * Sadece belirtilen anahtarları al
-     * 
-     * @param array $keys İstenen anahtarlar
-     * @return array
-     */
-    public function only(array $keys): array;
-
-    /**
-     * Belirtilen anahtarlar hariç tüm input'u al
-     * 
-     * @param array $keys Hariç tutulacak anahtarlar
-     * @return array
-     */
-    public function except(array $keys): array;
-
-    /**
-     * Input'ta bir anahtar var mı?
-     * 
-     * @param string $key Kontrol edilecek anahtar
-     * @return bool
-     */
-    public function has(string $key): bool;
-
-    /**
-     * Input'ta birden fazla anahtar var mı?
-     * 
-     * @param array $keys Kontrol edilecek anahtarlar
-     * @return bool Tümü varsa true
-     */
-    public function hasAny(array $keys): bool;
-
-    /**
-     * Request'in JSON içerik tipinde olup olmadığını kontrol et
-     * Content-Type: application/json kontrolü yapar
-     * 
-     * @return bool
-     */
-    public function isJson(): bool;
-
-    /**
-     * Client JSON response bekliyor mu?
-     * Accept: application/json kontrolü yapar
-     * 
-     * @return bool
-     */
-    public function expectsJson(): bool;
-
-    /**
-     * Client JSON response istiyor mu?
-     * isJson() VEYA expectsJson() true ise true döner
-     * 
-     * @return bool
-     */
-    public function wantsJson(): bool;
-
-    /**
-     * Request AJAX/XMLHttpRequest mi?
-     * X-Requested-With: XMLHttpRequest kontrolü yapar
-     * 
-     * @return bool
-     */
-    public function ajax(): bool;
-
-    /**
-     * Request HTTPS üzerinden mi geldi?
-     * 
-     * @return bool
-     */
-    public function secure(): bool;
-
-    /**
-     * Client IP adresini al
-     * Proxy header'larını da dikkate alır (X-Forwarded-For)
-     * 
-     * @return string|null
-     */
-    public function ip(): ?string;
-
-    /**
-     * User agent string'ini al
-     * 
-     * @return string|null
-     */
-    public function userAgent(): ?string;
-
-    /**
-     * Authorization Bearer token'ını al
-     * Authorization: Bearer {token} header'ından çeker
-     * 
-     * @return string|null
-     */
-    public function bearerToken(): ?string;
-
-    /**
-     * Request method'unu al (GET, POST, PUT, DELETE, etc.)
+     * HTTP method getter
      * 
      * @return string
      */
     public function method(): string;
-
+    
     /**
-     * Request path'ini al (/api/users/123)
-     * Query string olmadan, sadece path
+     * Request path getter (without query string)
      * 
      * @return string
      */
     public function path(): string;
-
+    
     /**
-     * Full URL'i al (https://example.com/api/users/123?page=1)
+     * Full URL getter
      * 
      * @return string
      */
     public function url(): string;
-
+    
     /**
-     * Full URL'i query string ile al
+     * Full URL with query string getter
      * 
      * @return string
      */
     public function fullUrl(): string;
-
+    
     /**
-     * Route parametrelerini al/set et
+     * Check if request is HTTPS
      * 
-     * @param array|null $parameters Parametreler (null ise getter)
-     * @return array|self
+     * @return bool
      */
-    public function routeParameters(?array $parameters = null): array|self;
-
+    public function isSecure(): bool;
+    
     /**
-     * Authenticated user'ı al/set et
+     * Get client IP address
      * 
-     * @param mixed|null $user User instance (null ise getter)
-     * @return mixed|self
+     * @param bool $checkProxy Check proxy headers?
+     * @return string
      */
-    public function user(mixed $user = null): mixed;
-
+    public function ip(bool $checkProxy = true): string;
+    
     /**
-     * Request'e custom attribute ekle
-     * Middleware'ler arası veri paylaşımı için
+     * Get user agent
      * 
-     * @param string $key Anahtar
-     * @param mixed $value Değer
-     * @return self
+     * @return string|null
      */
-    public function setAttribute(string $key, mixed $value): self;
-
+    public function userAgent(): ?string;
+    
     /**
-     * Custom attribute al
+     * Get header value (MISSING METHOD - NOW ADDED!)
      * 
-     * @param string $key Anahtar
-     * @param mixed $default Varsayılan değer
+     * @param string $name Header name
+     * @param string|null $default Default value
+     * @return string|null
+     */
+    public function header(string $name, ?string $default = null): ?string;
+    
+    /**
+     * Check if header exists
+     * 
+     * @param string $name Header name
+     * @return bool
+     */
+    public function hasHeader(string $name): bool;
+    
+    /**
+     * Get bearer token from Authorization header
+     * 
+     * @return string|null
+     */
+    public function bearerToken(): ?string;
+    
+    /**
+     * Get input value from any source (query, body, route params)
+     * 
+     * @param string|null $key Input key (null = all)
+     * @param mixed $default Default value
      * @return mixed
      */
-    public function getAttribute(string $key, mixed $default = null): mixed;
+    public function input(?string $key = null, mixed $default = null): mixed;
+    
+    /**
+     * Get all input data
+     * 
+     * @return array<string, mixed>
+     */
+    public function all(): array;
+    
+    /**
+     * Get only specified input keys
+     * 
+     * @param array<string> $keys Keys to get
+     * @return array<string, mixed>
+     */
+    public function only(array $keys): array;
+    
+    /**
+     * Get all input except specified keys
+     * 
+     * @param array<string> $keys Keys to exclude
+     * @return array<string, mixed>
+     */
+    public function except(array $keys): array;
+    
+    /**
+     * Check if input key exists
+     * 
+     * @param string $key Input key
+     * @return bool
+     */
+    public function has(string $key): bool;
+    
+    /**
+     * Check if input key exists and is not empty
+     * 
+     * @param string $key Input key
+     * @return bool
+     */
+    public function filled(string $key): bool;
+    
+    /**
+     * Get query parameter
+     * 
+     * @param string $key Parameter key
+     * @param mixed $default Default value
+     * @return mixed
+     */
+    public function query(string $key, mixed $default = null): mixed;
+    
+    /**
+     * Get POST/body parameter
+     * 
+     * @param string $key Parameter key
+     * @param mixed $default Default value
+     * @return mixed
+     */
+    public function post(string $key, mixed $default = null): mixed;
+    
+    /**
+     * Get route parameter
+     * 
+     * @param string $key Parameter key
+     * @param mixed $default Default value
+     * @return mixed
+     */
+    public function route(string $key, mixed $default = null): mixed;
+    
+    /**
+     * Get cookie value
+     * 
+     * @param string $key Cookie key
+     * @param mixed $default Default value
+     * @return mixed
+     */
+    public function cookie(string $key, mixed $default = null): mixed;
+    
+    /**
+     * Get file from upload
+     * 
+     * @param string $key File key
+     * @return \Psr\Http\Message\UploadedFileInterface|null
+     */
+    public function file(string $key): ?\Psr\Http\Message\UploadedFileInterface;
+    
+    /**
+     * Check if request has file upload
+     * 
+     * @param string $key File key
+     * @return bool
+     */
+    public function hasFile(string $key): bool;
+    
+    /**
+     * Check if request is JSON
+     * 
+     * @return bool
+     */
+    public function isJson(): bool;
+    
+    /**
+     * Check if request wants JSON response
+     * 
+     * @return bool
+     */
+    public function wantsJson(): bool;
+    
+    /**
+     * Check if request expects JSON response
+     * 
+     * @return bool
+     */
+    public function expectsJson(): bool;
+    
+    /**
+     * Check if request is AJAX
+     * 
+     * @return bool
+     */
+    public function isAjax(): bool;
+    
+    /**
+     * Get request format (json, html, xml)
+     * 
+     * @return string
+     */
+    public function format(): string;
 }
