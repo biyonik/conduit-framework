@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Conduit\Database\Relations;
 
+use Conduit\Database\Contracts\ConnectionInterface;
+use Conduit\Database\Grammar\Grammar;
 use Conduit\Database\Model;
 use Conduit\Database\QueryBuilder;
 use Conduit\Database\Collection;
@@ -183,9 +185,29 @@ abstract class Relation
      *
      * @return QueryBuilder
      */
-    public function getQuery(): QueryBuilder
+    final public function getQuery(): QueryBuilder
     {
         return $this->query;
+    }
+
+    /**
+     * Connection instance'ı al
+     *
+     * @return ConnectionInterface
+     */
+    final protected function getConnection(): ConnectionInterface
+    {
+        return $this->query->getConnection();
+    }
+
+    /**
+     * Grammar instance'ı al
+     *
+     * @return Grammar
+     */
+    final protected function getGrammar(): Grammar
+    {
+        return $this->query->getGrammar();
     }
 
     /**

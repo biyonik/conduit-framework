@@ -71,6 +71,26 @@ class QueryBuilder implements QueryBuilderInterface
     ) {}
 
     /**
+     * Connection instance'ı al
+     *
+     * @return ConnectionInterface
+     */
+    public function getConnection(): ConnectionInterface
+    {
+        return $this->connection;
+    }
+
+    /**
+     * Grammar instance'ı al
+     *
+     * @return Grammar
+     */
+    public function getGrammar(): Grammar
+    {
+        return $this->grammar;
+    }
+
+    /**
      * {@inheritdoc}
      */
     public function select(string|array ...$columns): self

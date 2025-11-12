@@ -6,6 +6,7 @@ namespace Conduit\Database\Relations;
 
 use Conduit\Database\Collection;
 use Conduit\Database\Model;
+use Conduit\Database\QueryBuilder;
 use JsonException;
 
 /**
@@ -181,17 +182,16 @@ class BelongsToMany extends Relation
         $ids = is_array($ids) ? $ids : [$ids];
 
         foreach ($ids as $id) {
-            $this->parent->newQuery()
-                ->insert(
-                    $this->grammar->compileInsert($this->pivotTable, [
-                        $this->foreignPivotKey,
-                        $this->relatedPivotKey
-                    ]),
-                    [
-                        $this->parent->getAttribute($this->parentKey),
-                        $id
-                    ]
-                );
+            // Yeni QueryBuilder oluştur ve pivot table'a insert et
+            $builder = new QueryBuilder(
+                $this->getConnection(),
+                $this->getGrammar()
+            );
+
+            $builder->table($this->pivotTable)->insert([
+                $this->foreignPivotKey => $this->parent->getAttribute($this->parentKey),
+                $this->relatedPivotKey => $id
+            ]);
         }
     }
 
@@ -200,11 +200,17 @@ class BelongsToMany extends Relation
      *
      * @param int|array|null $ids Related model ID(s) (null = tümü)
      * @return int Silinen kayıt sayısı
+     * @throws JsonException
      */
     public function detach(int|array|null $ids = null): int
     {
-        $query = $this->parent->newQuery()
-            ->from($this->pivotTable)
+        // Pivot table için query builder oluştur
+        $builder = new QueryBuilder(
+            $this->getConnection(),
+            $this->getGrammar()
+        );
+
+        $builder->table($this->pivotTable)
             ->where(
                 $this->foreignPivotKey,
                 $this->parent->getAttribute($this->parentKey)
@@ -213,10 +219,10 @@ class BelongsToMany extends Relation
         // Eğer ID'ler belirtilmişse, sadece onları sil
         if ($ids !== null) {
             $ids = is_array($ids) ? $ids : [$ids];
-            $query->whereIn($this->relatedPivotKey, $ids);
+            $builder->whereIn($this->relatedPivotKey, $ids);
         }
 
-        return $query->delete();
+        return $builder->delete();
     }
 
     /**
@@ -229,8 +235,17 @@ class BelongsToMany extends Relation
      */
     public function sync(array $ids): void
     {
-        // Mevcut ID'leri al
-        $current = $this->get()->pluck($this->relatedKey)->toArray();
+        // Mevcut ID'leri al (pivot table'dan değil, related model'den)
+        $builder = new QueryBuilder(
+            $this->getConnection(),
+            $this->getGrammar()
+        );
+
+        $current = $builder->table($this->pivotTable)
+            ->where($this->foreignPivotKey, $this->parent->getAttribute($this->parentKey))
+            ->get()
+            ->pluck($this->relatedPivotKey)
+            ->toArray();
 
         // Attach edilecekler (yeni olanlar)
         $attachIds = array_diff($ids, $current);
