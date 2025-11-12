@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Conduit\Database\Grammar;
 
+use Conduit\Database\Schema\Blueprint;
+
 /**
  * MySQL SQL Grammar
  *
@@ -138,15 +140,19 @@ class MySQLGrammar extends Grammar
     }
 
     /**
-     * Index sil
-     *
-     * @param string $table Tablo adı
-     * @param string $indexName Index adı
-     * @return string
+     * Compile DROP INDEX statement (MySQL syntax)
+     * 
+     * @param Blueprint $blueprint Blueprint instance
+     * @param array $command Command array
+     * @return string DROP INDEX SQL
      */
-    public function compileDropIndex(string $table, string $indexName): string
+     public function compileDropIndex(Blueprint $blueprint, array $command): string
     {
-        $table = $this->wrapTable($table);
-        return "DROP INDEX `{$indexName}` ON {$table}";
+        $table = $this->wrapTable($blueprint->getTable());
+        $index = is_array($command['index'])
+            ? $this->createIndexName('index', $command['index'])
+            : $command['index'];
+
+        return "DROP INDEX `{$index}` ON {$table}";
     }
 }

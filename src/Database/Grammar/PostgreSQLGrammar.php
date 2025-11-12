@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Conduit\Database\Grammar;
 
+use Conduit\Database\Schema\Blueprint;
+
 /**
  * PostgreSQL SQL Grammar
  *
@@ -137,14 +139,19 @@ class PostgreSQLGrammar extends Grammar
     }
 
     /**
-     * Index sil
-     *
-     * @param string $table Tablo adı
-     * @param string $indexName Index adı
-     * @return string
+     * Compile DROP INDEX statement (PostgreSQL syntax)
+     * PostgreSQL'de DROP INDEX tablo adı gerektirmez
+     * 
+     * @param Blueprint $blueprint Blueprint instance
+     * @param array $command Command array
+     * @return string DROP INDEX SQL
      */
-    public function compileDropIndex(string $table, string $indexName): string
+    public function compileDropIndex(Blueprint $blueprint, array $command): string
     {
-        return "DROP INDEX IF EXISTS \"{$indexName}\"";
+        $index = is_array($command['index'])
+            ? $this->createIndexName('index', $command['index'])
+            : $command['index'];
+
+        return "DROP INDEX IF EXISTS \"{$index}\"";
     }
 }

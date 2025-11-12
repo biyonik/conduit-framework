@@ -8,6 +8,10 @@ use Conduit\Database\Contracts\ConnectionInterface;
 use Conduit\Database\Exceptions\ConnectionException;
 use Conduit\Database\Exceptions\DatabaseException;
 use Conduit\Database\Exceptions\QueryException;
+use Conduit\Database\Grammar\Grammar;
+use Conduit\Database\Grammar\MySQLGrammar;
+use Conduit\Database\Grammar\PostgreSQLGrammar;
+use Conduit\Database\Grammar\SQLiteGrammar;
 use PDO;
 use PDOException;
 
@@ -357,6 +361,18 @@ class Connection implements ConnectionInterface
     public function getDriverName(): string
     {
         return $this->config['driver'] ?? 'mysql';
+    }
+
+    public function getGrammar(): Grammar
+    {
+        $driver = $this->getDriverName();
+
+        return match ($driver) {
+            'mysql' => new MySQLGrammar(),
+            'sqlite' => new SQLiteGrammar(),
+            'pgsql' => new PostgreSQLGrammar(),
+            default => throw new ConnectionException("Unsupported database driver: {$driver}"),
+        };
     }
 
     /**
