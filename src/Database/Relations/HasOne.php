@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Conduit\Database\Relations;
 
+use Conduit\Database\Collection;
 use Conduit\Database\Model;
 use JsonException;
 
@@ -55,6 +56,51 @@ class HasOne extends Relation
                 $this->parent->getAttribute($this->localKey)
             );
         }
+    }
+
+    /**
+     * {@inheritdoc}
+     *
+     * Eager loading için constraint ekle
+     * WHERE user_id IN (1,2,3,4,5)
+     */
+    public function addEagerConstraints(Collection $models): void
+    {
+        // Parent model'lerin key'lerini topla
+        $keys = $models->pluck($this->localKey)->all();
+
+        // WHERE IN constraint ekle
+        $this->query->whereIn($this->foreignKey, array_values(array_unique($keys)));
+    }
+
+    /**
+     * {@inheritdoc}
+     *
+     * Related model'leri parent model'lere eşleştir
+     *
+     * @throws JsonException
+     */
+    public function match(Collection $models, Collection $results, string $relation): Collection
+    {
+        // Related model'leri foreign key'e göre dictionary'ye çevir
+        $dictionary = [];
+        foreach ($results as $result) {
+            $key = $result->getAttribute($this->foreignKey);
+            $dictionary[$key] = $result;
+        }
+
+        // Her parent model için matching related model'i bul ve attach et
+        foreach ($models as $model) {
+            $key = $model->getAttribute($this->localKey);
+
+            if (isset($dictionary[$key])) {
+                $model->setRelation($relation, $dictionary[$key]);
+            } else {
+                $model->setRelation($relation, null);
+            }
+        }
+
+        return $models;
     }
 
     /**

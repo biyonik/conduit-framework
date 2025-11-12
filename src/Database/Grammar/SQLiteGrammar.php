@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Conduit\Database\Grammar;
 
 use Conduit\Database\Schema\Blueprint;
+use Conduit\Database\Schema\ColumnDefinition;
 
 /**
  * SQLite SQL Grammar
@@ -105,7 +106,7 @@ class SQLiteGrammar extends Grammar
 
     /**
      * Compile DROP INDEX statement (SQLite syntax)
-     * 
+     *
      * @param Blueprint $blueprint Blueprint instance
      * @param array $command Command array
      * @return string DROP INDEX SQL
@@ -117,5 +118,10 @@ class SQLiteGrammar extends Grammar
             : $command['index'];
 
         return "DROP INDEX IF EXISTS \"{$index}\"";
+    }
+
+    protected function modifyAutoIncrement(ColumnDefinition $column): string
+    {
+        return $column->get('autoIncrement') ? ' AUTOINCREMENT' : '';
     }
 }

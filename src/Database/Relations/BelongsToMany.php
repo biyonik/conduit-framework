@@ -104,10 +104,77 @@ class BelongsToMany extends Relation
     }
 
     /**
+     * {@inheritdoc}
+     *
+     * BelongsToMany için eager constraint (pivot table kullanarak)
+     */
+    public function addEagerConstraints(Collection $models): void
+    {
+        // Parent model'lerin key'lerini topla
+        $keys = $models->pluck($this->parentKey)->all();
+
+        // Pivot table üzerinden WHERE IN
+        $this->query->whereIn(
+            $this->pivotTable . '.' . $this->foreignPivotKey,
+            array_values(array_unique($keys))
+        );
+    }
+
+    /**
+     * {@inheritdoc}
+     *
+     * Many-to-many relationship'leri eşleştir
+     */
+    public function match(Collection $models, Collection $results, string $relation): Collection
+    {
+        // Related model'leri pivot key'e göre grupla
+        $dictionary = $this->buildDictionary($results);
+
+        // Her parent model için matching related model'leri bul
+        foreach ($models as $model) {
+            $key = $model->getAttribute($this->parentKey);
+
+            if (isset($dictionary[$key])) {
+                $model->setRelation($relation, new Collection($dictionary[$key]));
+            } else {
+                $model->setRelation($relation, new Collection([]));
+            }
+        }
+
+        return $models;
+    }
+
+    /**
+     * Pivot sonuçlarından dictionary oluştur
+     *
+     * @param Collection $results
+     * @return array
+     */
+    protected function buildDictionary(Collection $results): array
+    {
+        $dictionary = [];
+
+        // Pivot table'dan sonuçları grupla
+        foreach ($results as $result) {
+            // Pivot table'dan foreign key'i al
+            $foreignKey = $result->getAttribute($this->foreignPivotKey);
+
+            if (!isset($dictionary[$foreignKey])) {
+                $dictionary[$foreignKey] = [];
+            }
+
+            $dictionary[$foreignKey][] = $result;
+        }
+
+        return $dictionary;
+    }
+
+    /**
      * Related model(s) attach et (pivot table'a ekle)
      *
      * @param int|array $ids Related model ID(s)
      * @return void
+     * @throws JsonException
      */
     public function attach(int|array $ids): void
     {

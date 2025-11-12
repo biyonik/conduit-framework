@@ -75,7 +75,14 @@ class Collection implements ArrayAccess, Countable, IteratorAggregate
             return !empty($this->items) ? end($this->items) : null;
         }
 
-        return $this->filter($callback)->last();
+        $filtered = array_reverse($this->items);
+        foreach ($filtered as $item) {
+            if ($callback($item)) {
+                return $item;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -112,10 +119,10 @@ class Collection implements ArrayAccess, Countable, IteratorAggregate
         $result = [];
 
         foreach ($this->items as $item) {
-            $value = is_array($item) ? ($item[$column] ?? null) : ($item->$column ?? null);
+            $value = $this->getItemValue($item, $column);
 
             if ($key !== null) {
-                $keyValue = is_array($item) ? ($item[$key] ?? null) : ($item->$key ?? null);
+                $keyValue = $this->getItemValue($item, $key);
                 $result[$keyValue] = $value;
             } else {
                 $result[] = $value;
@@ -123,6 +130,32 @@ class Collection implements ArrayAccess, Countable, IteratorAggregate
         }
 
         return new static($result);
+    }
+
+    /**
+     * Item'dan value al (array veya object olabilir)
+     *
+     * @param mixed $item Item
+     * @param string $key Key
+     * @return mixed
+     */
+    protected function getItemValue(mixed $item, string $key): mixed
+    {
+        if (is_array($item)) {
+            return $item[$key] ?? null;
+        }
+
+        if (is_object($item)) {
+            // getAttribute() metodu varsa kullan (Model için)
+            if (method_exists($item, 'getAttribute')) {
+                return $item->getAttribute($key);
+            }
+
+            // Property access
+            return $item->$key ?? null;
+        }
+
+        return null;
     }
 
     /**
@@ -374,9 +407,9 @@ class Collection implements ArrayAccess, Countable, IteratorAggregate
      * @param array|static $items Eklenecek item'lar
      * @return static
      */
-    public function merge(array|static $items): static
+    public function merge(Collection|array $items): static
     {
-        if ($items instanceof static) {
+        if ($items instanceof self) {
             $items = $items->all();
         }
 

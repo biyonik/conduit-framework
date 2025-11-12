@@ -116,6 +116,13 @@ abstract class Model implements ModelInterface
     protected bool $exists = false;
 
     /**
+     * Loaded relationships
+     *
+     * @var array
+     */
+    protected array $relations = [];
+
+    /**
      * Constructor
      *
      * @param array $attributes Initial attributes
@@ -174,6 +181,43 @@ abstract class Model implements ModelInterface
     }
 
     /**
+     * Relationship sonucunu model'e attach et
+     *
+     * Eager loading tarafından kullanılır
+     *
+     * @param string $relation Relationship adı
+     * @param mixed $value Relationship sonucu (Model|Collection|null)
+     * @return self
+     */
+    public function setRelation(string $relation, mixed $value): self
+    {
+        $this->relations[$relation] = $value;
+        return $this;
+    }
+
+    /**
+     * Relationship yüklenmiş mi kontrol et
+     *
+     * @param string $relation Relationship name
+     * @return bool
+     */
+    public function relationLoaded(string $relation): bool
+    {
+        return array_key_exists($relation, $this->relations);
+    }
+
+    /**
+     * Relationship'i al (eğer yüklenmişse)
+     *
+     * @param string $relation Relationship adı
+     * @return mixed
+     */
+    public function getRelation(string $relation): mixed
+    {
+        return $this->relations[$relation] ?? null;
+    }
+
+    /**
      * Query builder instance al
      *
      * @return QueryBuilder
@@ -188,9 +232,10 @@ abstract class Model implements ModelInterface
      *
      * @return QueryBuilder
      */
-    protected function newQuery(): QueryBuilder
+    final protected function newQuery(): QueryBuilder
     {
-        return (new QueryBuilder(static::getConnection(), static::getGrammar()))->from($this->getTable());
+        return (new QueryBuilder(self::getConnection(), self::getGrammar()))
+            ->from($this->getTable());
     }
 
     /**
@@ -229,7 +274,15 @@ abstract class Model implements ModelInterface
      */
     public static function find(int|string $id): ?static
     {
-        return static::query()->where((new static())->getKeyName(), $id)->first();
+        $result = static::query()
+            ->where((new static())->getKeyName(), $id)
+            ->first();
+
+        if ($result === null) {
+            return null;
+        }
+
+        return (new static())->newFromArray($result);
     }
 
     /**
@@ -862,8 +915,9 @@ abstract class Model implements ModelInterface
     /**
      * Relationship load et (lazy loading)
      *
-     * @param string $relation Relationship method name
+     * @param string $key
      * @return mixed
+     * @throws JsonException
      */
     public function __get(string $key): mixed
     {
@@ -872,14 +926,20 @@ abstract class Model implements ModelInterface
             return $this->getAttribute($key);
         }
 
+        // Eğer relation zaten yüklenmişse, onu dön
+        if ($this->relationLoaded($key)) {
+            return $this->getRelation($key);
+        }
+
         // Relationship mi kontrol et
         if (method_exists($this, $key)) {
             $relation = $this->$key();
 
             // Eğer Relation instance ise, sonuçları getir ve cache'le
             if ($relation instanceof Relations\Relation) {
-                $this->attributes[$key] = $relation->getResults();
-                return $this->attributes[$key];
+                $result = $relation->getResults();
+                $this->setRelation($key, $result);
+                return $result;
             }
         }
 
@@ -899,27 +959,92 @@ abstract class Model implements ModelInterface
      */
     public static function with(string|array ...$relations): QueryBuilder
     {
+        // İlk parametre array ise, onu kullan
+        if (count($relations) === 1 && is_array($relations[0])) {
+            $relations = $relations[0];
+        }
+
         $instance = new static();
-        $query = $instance->newQuery();
-
-        // Eager loading metadata'sını query'ye ekle
-        // (Bu metadata QueryBuilder tarafından işlenecek)
-        $query->eagerLoad = is_array($relations[0]) ? $relations[0] : $relations;
-
-        return $query;
+        // QueryBuilder'a eager load relationship'leri ekle
+        return $instance->newQuery()->with($relations);
     }
 
     /**
-     * Relationship yüklenmiş mi kontrol et
+     * QueryBuilder'dan gelen sonuçları Model Collection'a çevir
      *
-     * @param string $relation Relationship name
-     * @return bool
+     * Bu method QueryBuilder::get() tarafından çağrılacak
+     *
+     * @param array $results Raw database results
+     * @param array $eagerLoad Eager load edilecek relationship'ler
+     * @return Collection Model collection
      */
-    public function relationLoaded(string $relation): bool
+    public static function hydrate(array $results, array $eagerLoad = []): Collection
     {
-        return array_key_exists($relation, $this->attributes)
-            && $this->attributes[$relation] instanceof (Model|Collection);
+        $instance = new static();
+
+        // Her result'ı Model instance'a çevir
+        $models = array_map(function ($result) use ($instance) {
+            return $instance->newFromArray($result);
+        }, $results);
+
+        $collection = new Collection($models);
+
+        // Eğer eager load varsa, relationship'leri yükle
+        if (!empty($eagerLoad)) {
+            $collection = static::eagerLoadRelations($collection, $eagerLoad);
+        }
+
+        return $collection;
     }
+
+    /**
+     * Relationship'leri eager load et
+     *
+     * @param Collection $models Model collection
+     * @param array $relations Yüklenecek relationship'ler
+     * @return Collection Updated collection
+     */
+    protected static function eagerLoadRelations(Collection $models, array $relations): Collection
+    {
+        foreach ($relations as $name) {
+            // Her relationship için constraint'siz yeni relation instance oluştur
+            $models = static::eagerLoadRelation($models, $name);
+        }
+
+        return $models;
+    }
+
+    /**
+     * Tek bir relationship'i eager load et
+     *
+     * @param Collection $models Model collection
+     * @param string $name Relationship adı
+     * @return Collection Updated collection
+     */
+    protected static function eagerLoadRelation(Collection $models, string $name): Collection
+    {
+        if ($models->isEmpty()) {
+            return $models;
+        }
+
+        // İlk model'den relation instance al
+        $relation = $models->first()->$name();
+
+        // Eğer relation method yoksa, skip
+        if (!$relation instanceof Relations\Relation) {
+            return $models;
+        }
+
+        // Constraint'siz query'yi al ve tüm related model'leri eager load et
+        $relation->addEagerConstraints($models);
+
+        // Query'yi çalıştır ve sonuçları al
+        $results = $relation->getEager();
+
+        // Sonuçları model'lere match et
+        return $relation->match($models, $results, $name);
+    }
+
 
     /**
      * Array'den model oluştur (internal use)

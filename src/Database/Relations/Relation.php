@@ -46,6 +46,37 @@ abstract class Relation
     }
 
     /**
+     * Eager loading için constraint'leri ayarla
+     *
+     * Lazy loading: where user_id = 1
+     * Eager loading: where user_id IN (1,2,3,4,5)
+     *
+     * @param Collection $models Parent model collection
+     * @return void
+     */
+    abstract public function addEagerConstraints(Collection $models): void;
+
+    /**
+     * Eager loaded sonuçları parent model'lere eşleştir
+     *
+     * @param Collection $models Parent model collection
+     * @param Collection $results Related model results
+     * @param string $relation Relationship adı
+     * @return Collection Updated parent collection
+     */
+    abstract public function match(Collection $models, Collection $results, string $relation): Collection;
+
+    /**
+     * Eager loading için sonuçları al
+     *
+     * @return Collection
+     */
+    public function getEager(): Collection
+    {
+        return $this->get();
+    }
+
+    /**
      * Relationship constraint'lerini ekle
      *
      * Her relationship türü kendi constraint'lerini implement eder.

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Conduit\Database\Grammar;
 
 use Conduit\Database\Schema\Blueprint;
+use Conduit\Database\Schema\ColumnDefinition;
 
 /**
  * MySQL SQL Grammar
@@ -141,7 +142,7 @@ class MySQLGrammar extends Grammar
 
     /**
      * Compile DROP INDEX statement (MySQL syntax)
-     * 
+     *
      * @param Blueprint $blueprint Blueprint instance
      * @param array $command Command array
      * @return string DROP INDEX SQL
@@ -154,5 +155,10 @@ class MySQLGrammar extends Grammar
             : $command['index'];
 
         return "DROP INDEX `{$index}` ON {$table}";
+    }
+
+    protected function modifyAutoIncrement(ColumnDefinition $column): string
+    {
+        return $column->get('autoIncrement') ? ' AUTO_INCREMENT' : '';
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Conduit\Database\Relations;
 
+use Conduit\Database\Collection;
 use Conduit\Database\Model;
 use JsonException;
 
@@ -55,6 +56,51 @@ class BelongsTo extends Relation
                 $this->parent->getAttribute($this->foreignKey)
             );
         }
+    }
+
+    /**
+     * {@inheritdoc}
+     *
+     * BelongsTo için eager constraint
+     * WHERE id IN (1,2,3,4,5) -- parent ID'leri
+     */
+    public function addEagerConstraints(Collection $models): void
+    {
+        // Child model'lerin foreign key değerlerini topla
+        $keys = $models->pluck($this->foreignKey)->all();
+
+        // WHERE IN constraint ekle (owner key'e göre)
+        $this->query->whereIn($this->ownerKey, array_values(array_unique(array_filter($keys))));
+    }
+
+    /**
+     * {@inheritdoc}
+     *
+     * Parent model'leri child model'lere eşleştir
+     *
+     * @throws JsonException
+     */
+    public function match(Collection $models, Collection $results, string $relation): Collection
+    {
+        // Parent model'leri owner key'e göre dictionary'ye çevir
+        $dictionary = [];
+        foreach ($results as $result) {
+            $key = $result->getAttribute($this->ownerKey);
+            $dictionary[$key] = $result;
+        }
+
+        // Her child model için matching parent model'i bul ve attach et
+        foreach ($models as $model) {
+            $key = $model->getAttribute($this->foreignKey);
+
+            if (isset($dictionary[$key])) {
+                $model->setRelation($relation, $dictionary[$key]);
+            } else {
+                $model->setRelation($relation, null);
+            }
+        }
+
+        return $models;
     }
 
     /**

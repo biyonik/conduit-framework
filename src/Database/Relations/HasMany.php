@@ -58,6 +58,58 @@ class HasMany extends Relation
 
     /**
      * {@inheritdoc}
+     *
+     * Eager loading için constraint ekle
+     * WHERE user_id IN (1,2,3,4,5)
+     */
+    public function addEagerConstraints(Collection $models): void
+    {
+        // Parent model'lerin key'lerini topla
+        $keys = $models->pluck($this->localKey)->all();
+
+        // WHERE IN constraint ekle
+        $this->query->whereIn($this->foreignKey, array_values(array_unique($keys)));
+    }
+
+    /**
+     * {@inheritdoc}
+     *
+     * Related model'leri parent model'lere eşleştir
+     *
+     * HasMany için her parent birden fazla related model alabilir
+     *
+     * @throws JsonException
+     */
+    public function match(Collection $models, Collection $results, string $relation): Collection
+    {
+        // Related model'leri foreign key'e göre grupla
+        $dictionary = [];
+        foreach ($results as $result) {
+            $key = $result->getAttribute($this->foreignKey);
+
+            if (!isset($dictionary[$key])) {
+                $dictionary[$key] = [];
+            }
+
+            $dictionary[$key][] = $result;
+        }
+
+        // Her parent model için matching related model'leri bul ve attach et
+        foreach ($models as $model) {
+            $key = $model->getAttribute($this->localKey);
+
+            if (isset($dictionary[$key])) {
+                $model->setRelation($relation, new Collection($dictionary[$key]));
+            } else {
+                $model->setRelation($relation, new Collection([]));
+            }
+        }
+
+        return $models;
+    }
+
+    /**
+     * {@inheritdoc}
      */
     public function getResults(): Collection
     {
