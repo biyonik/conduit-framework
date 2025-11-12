@@ -4,211 +4,276 @@ declare(strict_types=1);
 
 namespace Conduit\Database\Schema;
 
-use Closure;
 use Conduit\Database\Connection;
-use Conduit\Database\Grammar\Grammar;
+use Conduit\Database\Exceptions\ConnectionException;
+use Conduit\Database\Exceptions\QueryException;
 
 /**
- * Schema Facade - Database tablo işlemleri için facade
- * 
- * Kullanım:
- * - Schema::create('users', function($table) {...})
- * - Schema::table('users', function($table) {...})
- * - Schema::drop('users')
- * - Schema::hasTable('users')
+ * Database Schema Yöneticisi (Facade)
+ *
+ * Blueprint tanımlarını SQL'e çevirir ve execute eder
+ * Dry-run mode destekli
+ *
+ * @package Conduit\Database\Schema
  */
 class Schema
 {
     /**
-     * Database connection instance
+     * Dry-run mode aktif mi?
      */
-    protected static ?Connection $connection = null;
+    private bool $dryRun = false;
 
     /**
-     * Set the connection to be used
-     * 
-     * @param Connection $connection Database bağlantısı
+     * Dry-run mode'da toplanan SQL statements
      */
-    public static function setConnection(Connection $connection): void
+    private array $previewSql = [];
+
+    public function __construct(
+        private Connection $connection
+    ) {}
+
+    /**
+     * Dry-run mode'u aktif et
+     */
+    final public function setDryRun(bool $dryRun): self
     {
-        self::$connection = $connection;
+        $this->dryRun = $dryRun;
+        $this->previewSql = [];
+
+        return $this;
     }
 
     /**
-     * Get the connection instance
-     * 
-     * @throws \RuntimeException Connection set edilmemişse
+     * Preview SQL statements'ları al
      */
-    protected static function getConnection(): Connection
+    final public function getPreviewSql(): array
     {
-        if (self::$connection === null) {
-            throw new \RuntimeException('Schema connection not set. Call Schema::setConnection() first.');
-        }
-
-        return self::$connection;
+        return $this->previewSql;
     }
 
     /**
-     * Create a new table
-     * 
+     * Yeni tablo oluştur
+     *
      * @param string $table Tablo adı
-     * @param Closure $callback Blueprint callback
-     * @throws \RuntimeException Tablo zaten varsa veya SQL hatası olursa
-     * 
-     * @example
-     * Schema::create('users', function (Blueprint $table) {
-     *     $table->id();
-     *     $table->string('name');
-     *     $table->string('email')->unique();
-     *     $table->timestamps();
-     * });
+     * @param callable $callback Blueprint callback
+     * @throws ConnectionException
+     * @throws QueryException
      */
-    public static function create(string $table, Closure $callback): void
+    public function create(string $table, callable $callback): void
     {
-        $connection = self::getConnection();
-        $grammar = $connection->getGrammar();
-
-        // Blueprint oluştur
         $blueprint = new Blueprint($table);
 
-        // Callback'i çalıştır (kullanıcı kolonları tanımlar)
+        // Callback'i çalıştır (kolonlar tanımlanır)
         $callback($blueprint);
 
-        // SQL statements'ları al
-        $statements = $blueprint->toSql($grammar, $connection);
+        // SQL'e çevir
+        $grammar = $this->connection->getGrammar();
 
-        // Her statement'ı çalıştır
-        foreach ($statements as $statement) {
-            $connection->statement($statement);
+        $statements = $blueprint->toSql($grammar, $this->connection);
+
+        if ($this->dryRun) {
+            // Dry-run: SQL'i topla, execute etme
+            $this->previewSql = array_merge($this->previewSql, $statements);
+        } else {
+            // Gerçek execute
+            foreach ($statements as $sql) {
+                $this->connection->statement($sql);
+            }
         }
     }
 
     /**
-     * Modify an existing table
-     * 
+     * Tabloyu güncelle (kolon ekle/sil/değiştir)
+     *
      * @param string $table Tablo adı
-     * @param Closure $callback Blueprint callback
-     * @throws \RuntimeException SQL hatası olursa
-     * 
-     * @example
-     * Schema::table('users', function (Blueprint $table) {
-     *     $table->string('phone')->nullable();
-     *     $table->dropColumn('old_field');
-     * });
+     * @param callable $callback Blueprint callback
+     * @throws ConnectionException
+     * @throws QueryException
      */
-    public static function table(string $table, Closure $callback): void
+    final public function table(string $table, callable $callback): void
     {
-        $connection = self::getConnection();
-        $grammar = $connection->getGrammar();
+        $blueprint = new Blueprint($table, true); // modify mode
 
-        // Blueprint oluştur (modify mode)
-        $blueprint = new Blueprint($table, $modify = true);
-
-        // Callback'i çalıştır
         $callback($blueprint);
 
-        // SQL statements'ları al
-        $statements = $blueprint->toSql($grammar, $connection);
+        $grammar = $this->connection->getGrammar();
 
-        // Her statement'ı çalıştır
-        foreach ($statements as $statement) {
-            $connection->statement($statement);
+        $statements = $blueprint->toSql($grammar, $this->connection);
+
+        if ($this->dryRun) {
+            $this->previewSql = array_merge($this->previewSql, $statements);
+        } else {
+            foreach ($statements as $sql) {
+                $this->connection->statement($sql);
+            }
         }
     }
 
     /**
-     * Drop a table
-     * 
+     * Tabloyu sil
+     *
      * @param string $table Tablo adı
-     * @throws \RuntimeException Tablo yoksa veya SQL hatası olursa
+     * @throws ConnectionException
+     * @throws QueryException
      */
-    public static function drop(string $table): void
+    final public function drop(string $table): void
     {
-        $connection = self::getConnection();
-        $grammar = $connection->getGrammar();
+        $sql = "DROP TABLE {$table}";
 
-        $sql = $grammar->compileDropTable($table);
-        $connection->statement($sql);
+        if ($this->dryRun) {
+            $this->previewSql[] = $sql;
+        } else {
+            $this->connection->statement($sql);
+        }
     }
 
     /**
-     * Drop a table if it exists
-     * 
+     * Tabloyu sil (varsa)
+     *
      * @param string $table Tablo adı
+     * @throws ConnectionException
+     * @throws QueryException
      */
-    public static function dropIfExists(string $table): void
+    final public function dropIfExists(string $table): void
     {
-        $connection = self::getConnection();
-        $grammar = $connection->getGrammar();
+        $sql = "DROP TABLE IF EXISTS {$table}";
 
-        $sql = $grammar->compileDropTableIfExists($table);
-        $connection->statement($sql);
+        if ($this->dryRun) {
+            $this->previewSql[] = $sql;
+        } else {
+            $this->connection->statement($sql);
+        }
     }
 
     /**
-     * Check if a table exists
-     * 
+     * Tablo var mı kontrol et
+     *
      * @param string $table Tablo adı
-     * @return bool Tablo varsa true
+     * @return bool
+     * @throws ConnectionException
+     * @throws QueryException
      */
-    public static function hasTable(string $table): bool
+    final public function hasTable(string $table): bool
     {
-        $connection = self::getConnection();
-        $grammar = $connection->getGrammar();
+        // Dry-run mode'da false döndür (güvenli)
+        if ($this->dryRun) {
+            return false;
+        }
 
-        $sql = $grammar->compileTableExists();
-        $results = $connection->select($sql, [$table]);
+        $grammar = $this->connection->getGrammar();
 
-        return count($results) > 0;
+        // MySQL
+        if ($grammar === 'mysql') {
+            $result = $this->connection->select(
+                "SHOW TABLES LIKE ?",
+                [$table]
+            );
+            return !empty($result);
+        }
+
+        // SQLite
+        if ($grammar === 'sqlite') {
+            $result = $this->connection->select(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                [$table]
+            );
+            return !empty($result);
+        }
+
+        // PostgreSQL
+        if ($grammar === 'pgsql') {
+            $result = $this->connection->select(
+                "SELECT tablename FROM pg_tables WHERE tablename=?",
+                [$table]
+            );
+            return !empty($result);
+        }
+
+        return false;
     }
 
     /**
-     * Check if a column exists in a table
-     * 
+     * Tablodaki kolon var mı kontrol et
+     *
      * @param string $table Tablo adı
      * @param string $column Kolon adı
-     * @return bool Kolon varsa true
+     * @return bool
      */
-    public static function hasColumn(string $table, string $column): bool
+    final public function hasColumn(string $table, string $column): bool
     {
-        $connection = self::getConnection();
-        $grammar = $connection->getGrammar();
+        if ($this->dryRun) {
+            return false;
+        }
 
-        $sql = $grammar->compileColumnExists($table);
-        $results = $connection->select($sql, [$column]);
+        $grammar = $this->connection->getGrammar();
 
-        return count($results) > 0;
+        // MySQL
+        if ($grammar === 'mysql') {
+            $result = $this->connection->select(
+                "SHOW COLUMNS FROM {$table} LIKE ?",
+                [$column]
+            );
+            return !empty($result);
+        }
+
+        // SQLite
+        if ($grammar === 'sqlite') {
+            $result = $this->connection->select("PRAGMA table_info({$table})");
+            foreach ($result as $col) {
+                if ($col['name'] === $column) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // PostgreSQL
+        if ($grammar === 'pgsql') {
+            $result = $this->connection->select(
+                "SELECT column_name FROM information_schema.columns WHERE table_name=? AND column_name=?",
+                [$table, $column]
+            );
+            return !empty($result);
+        }
+
+        return false;
     }
 
     /**
-     * Get all column names for a table
-     * 
-     * @param string $table Tablo adı
-     * @return array<string> Kolon adları
+     * Tüm tabloları getir
+     *
+     * @return array
      */
-    public static function getColumnListing(string $table): array
+    public function getTables(): array
     {
-        $connection = self::getConnection();
-        $grammar = $connection->getGrammar();
+        if ($this->dryRun) {
+            return [];
+        }
 
-        $sql = $grammar->compileColumnListing($table);
-        $results = $connection->select($sql);
+        $grammar = $this->connection->getGrammar();
 
-        return array_map(fn($result) => $result['column_name'] ?? $result['Field'], $results);
-    }
+        // MySQL
+        if ($grammar === 'mysql') {
+            $results = $this->connection->select("SHOW TABLES");
+            return array_map(fn($r) => array_values((array)$r)[0], $results);
+        }
 
-    /**
-     * Rename a table
-     * 
-     * @param string $from Eski tablo adı
-     * @param string $to Yeni tablo adı
-     */
-    public static function rename(string $from, string $to): void
-    {
-        $connection = self::getConnection();
-        $grammar = $connection->getGrammar();
+        // SQLite
+        if ($grammar === 'sqlite') {
+            $results = $this->connection->select(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+            );
+            return array_column($results, 'name');
+        }
 
-        $sql = $grammar->compileRenameTable($from, $to);
-        $connection->statement($sql);
+        // PostgreSQL
+        if ($grammar === 'pgsql') {
+            $results = $this->connection->select(
+                "SELECT tablename FROM pg_tables WHERE schemaname='public'"
+            );
+            return array_column($results, 'tablename');
+        }
+
+        return [];
     }
 }
