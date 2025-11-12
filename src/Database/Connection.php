@@ -242,18 +242,16 @@ class Connection implements ConnectionInterface
      */
     public function beginTransaction(): bool
     {
-        // Nested transaction desteği (SAVEPOINT kullanarak)
         if ($this->transactionLevel === 0) {
             try {
-                return $this->getPdo()->beginTransaction();
+                $result = $this->getPdo()->beginTransaction();
+                $this->transactionLevel++; // Success durumunda increment
+                return $result;
             } catch (PDOException $e) {
-                throw new ConnectionException("Failed to begin transaction: {$e->getMessage()}", 0, $e);
-            } finally {
-                $this->transactionLevel++;
+                throw new ConnectionException("...", 0, $e);
             }
         }
 
-        // Nested transaction için SAVEPOINT kullan
         $this->getPdo()->exec("SAVEPOINT trans{$this->transactionLevel}");
         $this->transactionLevel++;
 

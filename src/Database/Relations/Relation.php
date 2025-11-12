@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Conduit\Database\Relations;
 
+use Conduit\Database\Contracts\ConnectionInterface;
+use Conduit\Database\Grammar\Grammar;
 use Conduit\Database\Model;
 use Conduit\Database\QueryBuilder;
 use Conduit\Database\Collection;
@@ -43,6 +45,37 @@ abstract class Relation
     protected function getRelatedQuery(): QueryBuilder
     {
         return (new $this->related())->newQuery();
+    }
+
+    /**
+     * Eager loading için constraint'leri ayarla
+     *
+     * Lazy loading: where user_id = 1
+     * Eager loading: where user_id IN (1,2,3,4,5)
+     *
+     * @param Collection $models Parent model collection
+     * @return void
+     */
+    abstract public function addEagerConstraints(Collection $models): void;
+
+    /**
+     * Eager loaded sonuçları parent model'lere eşleştir
+     *
+     * @param Collection $models Parent model collection
+     * @param Collection $results Related model results
+     * @param string $relation Relationship adı
+     * @return Collection Updated parent collection
+     */
+    abstract public function match(Collection $models, Collection $results, string $relation): Collection;
+
+    /**
+     * Eager loading için sonuçları al
+     *
+     * @return Collection
+     */
+    public function getEager(): Collection
+    {
+        return $this->get();
     }
 
     /**
@@ -152,9 +185,29 @@ abstract class Relation
      *
      * @return QueryBuilder
      */
-    public function getQuery(): QueryBuilder
+    final public function getQuery(): QueryBuilder
     {
         return $this->query;
+    }
+
+    /**
+     * Connection instance'ı al
+     *
+     * @return ConnectionInterface
+     */
+    final protected function getConnection(): ConnectionInterface
+    {
+        return $this->query->getConnection();
+    }
+
+    /**
+     * Grammar instance'ı al
+     *
+     * @return Grammar
+     */
+    final protected function getGrammar(): Grammar
+    {
+        return $this->query->getGrammar();
     }
 
     /**

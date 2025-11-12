@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Conduit\Database\Grammar;
 
 use Conduit\Database\Schema\Blueprint;
+use Conduit\Database\Schema\ColumnDefinition;
 
 /**
  * PostgreSQL SQL Grammar
@@ -141,7 +142,7 @@ class PostgreSQLGrammar extends Grammar
     /**
      * Compile DROP INDEX statement (PostgreSQL syntax)
      * PostgreSQL'de DROP INDEX tablo adı gerektirmez
-     * 
+     *
      * @param Blueprint $blueprint Blueprint instance
      * @param array $command Command array
      * @return string DROP INDEX SQL
@@ -153,5 +154,11 @@ class PostgreSQLGrammar extends Grammar
             : $command['index'];
 
         return "DROP INDEX IF EXISTS \"{$index}\"";
+    }
+
+    protected function modifyAutoIncrement(ColumnDefinition $column): string
+    {
+        // PostgreSQL'de type'ı SERIAL'a çevirmek lazım
+        return ''; // Already handled in type definition
     }
 }

@@ -28,6 +28,8 @@ class QueryBuilder implements QueryBuilderInterface
 {
     /**
      * Query components (SELECT, FROM, WHERE, etc.)
+     *
+     * @var array
      */
     protected array $components = [
         'select' => [],
@@ -43,8 +45,19 @@ class QueryBuilder implements QueryBuilderInterface
 
     /**
      * Bound values (prepared statement için)
+     *
+     * @var array
      */
     protected array $bindings = [];
+
+
+    /**
+     * Eager load relations
+     *
+     * @var array
+     */
+    protected array $eagerLoad = [];
+
 
     /**
      * Constructor
@@ -56,6 +69,26 @@ class QueryBuilder implements QueryBuilderInterface
         protected ConnectionInterface $connection,
         protected Grammar $grammar
     ) {}
+
+    /**
+     * Connection instance'ı al
+     *
+     * @return ConnectionInterface
+     */
+    public function getConnection(): ConnectionInterface
+    {
+        return $this->connection;
+    }
+
+    /**
+     * Grammar instance'ı al
+     *
+     * @return Grammar
+     */
+    public function getGrammar(): Grammar
+    {
+        return $this->grammar;
+    }
 
     /**
      * {@inheritdoc}
@@ -365,7 +398,49 @@ class QueryBuilder implements QueryBuilderInterface
         $sql = $this->toSql();
         $results = $this->connection->select($sql, $this->bindings);
 
+        // Eğer FROM bir Model ise ve eager load varsa
+        if (!empty($this->eagerLoad)) {
+            // Model'in hydrate metodunu kullan
+            $modelClass = $this->getModelClass();
+
+            if ($modelClass && class_exists($modelClass)) {
+                return $modelClass::hydrate($results, $this->eagerLoad);
+            }
+        }
+
         return new Collection($results);
+    }
+
+    /**
+     * FROM clause'dan model class'ını çıkar
+     *
+     * @return string|null
+     */
+    protected function getModelClass(): ?string
+    {
+        // Table name'den model class tahmin et
+        // Bu basit bir implementation, geliştirilebilir
+        $table = $this->components['from'];
+
+        if (empty($table)) {
+            return null;
+        }
+
+        // Table name: 'users' -> Model: 'App\Models\User'
+        $className = str_replace(' ', '', ucwords(str_replace('_', ' ', rtrim($table, 's'))));
+
+        $possibleClasses = [
+            "App\\Models\\{$className}",
+            "Conduit\\Database\\{$className}",
+        ];
+
+        foreach ($possibleClasses as $class) {
+            if (class_exists($class)) {
+                return $class;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -774,5 +849,39 @@ class QueryBuilder implements QueryBuilderInterface
     public function clone(): self
     {
         return clone $this;
+    }
+
+    /**
+     * Eager load edilecek relationship'leri al
+     *
+     * @return array
+     */
+    public function getEagerLoad(): array
+    {
+        return $this->eagerLoad;
+    }
+
+    /**
+     * Eager load relationship'leri set et
+     *
+     * @param array $relations Relationship isimleri
+     * @return self
+     */
+    public function setEagerLoad(array $relations): self
+    {
+        $this->eagerLoad = $relations;
+        return $this;
+    }
+
+    /**
+     * Eager load relationship'leri set et
+     *
+     * @param array $relations Relationship isimleri
+     * @return self
+     */
+    public function with(array $relations): self
+    {
+        $this->eagerLoad = array_merge($this->eagerLoad, $relations);
+        return $this;
     }
 }
