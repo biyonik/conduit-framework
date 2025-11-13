@@ -5,380 +5,317 @@ declare(strict_types=1);
 namespace Conduit\Database\Schema;
 
 use Conduit\Database\Connection;
+use Conduit\Database\Exceptions\MigrationException;
+use PDOException;
 
 /**
- * Migrator - Migration'ları çalıştıran ve rollback eden sınıf
+ * Database Migration Yöneticisi
  *
- * CLI commands bu sınıfı kullanacak:
- * - php conduit migrate
- * - php conduit migrate:rollback
- * - php conduit migrate:reset
- * - php conduit migrate:fresh
+ * Sorumluluklar:
+ * - Migration dosyalarını çalıştırma
+ * - Migration durumunu takip etme (migrations tablosu)
+ * - Rollback desteği
+ * - Dry-run mode (SQL preview)
  *
  * @package Conduit\Database\Schema
  */
 class Migrator
 {
     /**
-     * Migration repository
+     * Migration repository (durum takibi)
      */
-    protected MigrationRepository $repository;
+    private MigrationRepository $repository;
 
     /**
-     * Connection instance
+     * Dry-run mode aktif mi?
      */
-    protected Connection $connection;
+    private bool $dryRun = false;
 
     /**
-     * Migration files path
+     * Dry-run mode'da toplanan SQL statements
      */
-    protected string $path;
+    private array $previewSql = [];
 
-    /**
-     * Output callback (CLI için)
-     */
-    protected ?\Closure $output = null;
-
-    /**
-     * Constructor
-     *
-     * @param Connection $connection Database connection
-     * @param MigrationRepository $repository Migration repository
-     * @param string $path Migration files path
-     */
     public function __construct(
-        Connection $connection,
-        MigrationRepository $repository,
-        string $path
+        private Connection $connection,
+        private string $migrationPath
     ) {
-        $this->connection = $connection;
-        $this->repository = $repository;
-        $this->path = $path;
+        $this->repository = new MigrationRepository($connection);
     }
 
     /**
-     * Run pending migrations
+     * Dry-run mode'u aktif et
      *
-     * @return array<string> Çalıştırılan migration'lar
+     * Bu modda hiçbir SQL execute edilmez, sadece preview gösterilir
      */
-    public function run(): array
+    public function setDryRun(bool $dryRun): self
     {
-        // Repository table yoksa oluştur
-        if (!$this->repository->repositoryExists()) {
+        $this->dryRun = $dryRun;
+        $this->previewSql = [];
+
+        return $this;
+    }
+
+    /**
+     * Dry-run mode aktif mi?
+     */
+    public function isDryRun(): bool
+    {
+        return $this->dryRun;
+    }
+
+    /**
+     * Preview SQL statements'ları al (dry-run mode için)
+     */
+    final public function getPreviewSql(): array
+    {
+        return $this->previewSql;
+    }
+
+    /**
+     * Bekleyen migration'ları çalıştır
+     *
+     * @return array Çalıştırılan migration'lar
+     * @throws MigrationException
+     */
+    final public function run(): array
+    {
+        // Migrations tablosunu oluştur (yoksa)
+        if (!$this->dryRun) {
             $this->repository->createRepository();
-            $this->note('Migration table created successfully.');
         }
 
-        // Pending migration'ları al
-        $pending = $this->repository->getPending($this->path);
+        // Bekleyen migration'ları bul
+        $migrations = $this->getPendingMigrations();
 
-        if (empty($pending)) {
-            $this->note('Nothing to migrate.');
+        if (empty($migrations)) {
             return [];
         }
 
-        // Yeni batch numarası
         $batch = $this->repository->getNextBatchNumber();
-
-        $this->note("Running batch #{$batch}...");
-
         $ran = [];
 
-        foreach ($pending as $file) {
-            $this->runMigration($file, $batch);
-            $ran[] = $file;
-            $this->note("Migrated: {$file}");
+        foreach ($migrations as $migration) {
+            if ($this->dryRun) {
+                $this->runMigrationDryRun($migration);
+            } else {
+                $this->runMigration($migration, $batch);
+            }
+
+            $ran[] = $migration;
         }
 
         return $ran;
     }
 
     /**
-     * Run a single migration
-     *
-     * @param string $file Migration dosya adı
-     * @param int $batch Batch numarası
-     * @return void
-     * @throws \RuntimeException Migration çalışmazsa
+     * Migration'ı dry-run mode'da çalıştır (preview only)
      */
-    protected function runMigration(string $file, int $batch): void
+    private function runMigrationDryRun(string $file): void
     {
-        // Migration dosyasını require et
         $migration = $this->resolve($file);
 
-        // Transaction içinde çalıştır
-        $this->connection->beginTransaction();
+        // Schema builder'ı dry-run mode'a al
+        $schema = new Schema($this->connection);
+        $schema->setDryRun(true);
+
+        // Migration'ı çalıştır (SQL topla)
+        $migration->up();
+
+        // Toplanan SQL'leri al
+        $statements = $schema->getPreviewSql();
+
+        $this->previewSql[$file] = $statements;
+    }
+
+    /**
+     * Migration'ı gerçekten çalıştır
+     */
+    private function runMigration(string $file, int $batch): void
+    {
+        $migration = $this->resolve($file);
 
         try {
-            // up() metodunu çalıştır
+            $this->connection->beginTransaction();
+
+            // Migration'ı çalıştır
             $migration->up();
 
-            // Log'a kaydet
+            // Başarılı ise kaydet
             $this->repository->log($file, $batch);
 
             $this->connection->commit();
-        } catch (\Exception $e) {
-            $this->connection->rollback();
-            throw new \RuntimeException(
-                "Migration failed: {$file}\nError: {$e->getMessage()}",
-                0,
-                $e
+
+        } catch (PDOException $e) {
+            $this->connection->rollBack();
+            throw new MigrationException(
+                "Migration failed: {$file}. Error: " . $e->getMessage()
             );
         }
     }
 
     /**
-     * Rollback last batch
+     * Bekleyen migration'ları bul
      *
-     * @param int $steps Kaç batch geri gidilecek (default: 1)
-     * @return array<string> Rollback edilen migration'lar
+     * @return array Migration dosya isimleri
      */
-    public function rollback(int $steps = 1): array
+    private function getPendingMigrations(): array
     {
-        $rolled = [];
+        // Çalıştırılmış migration'lar
+        $ran = $this->repository->getRan();
 
-        for ($i = 0; $i < $steps; $i++) {
-            // Son batch'i al
-            $migrations = $this->repository->getLastBatch();
+        // Migration dosyalarını tara
+        $files = $this->getMigrationFiles();
 
-            if (empty($migrations)) {
-                $this->note('Nothing to rollback.');
-                break;
-            }
-
-            $batch = $this->repository->getLastBatchNumber();
-            $this->note("Rolling back batch #{$batch}...");
-
-            foreach ($migrations as $file) {
-                $this->rollbackMigration($file);
-                $rolled[] = $file;
-                $this->note("Rolled back: {$file}");
-            }
-        }
-
-        return $rolled;
+        // Henüz çalıştırılmamış olanlar
+        return array_diff($files, $ran);
     }
 
     /**
-     * Rollback a single migration
-     *
-     * @param string $file Migration dosya adı
-     * @return void
-     * @throws \RuntimeException Rollback başarısızsa
+     * Migration dosyalarını getir (sıralı)
      */
-    protected function rollbackMigration(string $file): void
+    private function getMigrationFiles(): array
     {
-        // Migration dosyasını require et
+        if (!is_dir($this->migrationPath)) {
+            return [];
+        }
+
+        $files = glob($this->migrationPath . '/*.php');
+
+        if ($files === false) {
+            return [];
+        }
+
+        // Sadece dosya adları
+        $files = array_map(fn($file) => basename($file), $files);
+
+        // Timestamp'e göre sırala
+        sort($files);
+
+        return $files;
+    }
+
+    /**
+     * Migration instance'ı oluştur
+     */
+    private function resolve(string $file): Migration
+    {
+        $path = $this->migrationPath . '/' . $file;
+
+        require_once $path;
+
+        // Class adını dosya adından çıkar
+        // 2024_01_01_000000_create_users_table.php -> CreateUsersTable
+        $className = $this->getClassNameFromFile($file);
+
+        return new $className($this->connection);
+    }
+
+    /**
+     * Dosya adından class adını çıkar
+     */
+    private function getClassNameFromFile(string $file): string
+    {
+        // 2024_01_01_000000_create_users_table.php
+        $name = str_replace('.php', '', $file);
+
+        // 2024_01_01_000000_create_users_table -> create_users_table
+        $parts = explode('_', $name);
+        $name = implode('_', array_slice($parts, 4));
+
+        // create_users_table -> CreateUsersTable
+        return str_replace('_', '', ucwords($name, '_'));
+    }
+
+    /**
+     * Son batch'i rollback et
+     *
+     * @return array Rollback edilen migration'lar
+     */
+    public function rollback(): array
+    {
+        $migrations = $this->repository->getLast();
+
+        if (empty($migrations)) {
+            return [];
+        }
+
+        $rolledBack = [];
+
+        foreach ($migrations as $migration) {
+            if ($this->dryRun) {
+                $this->rollbackMigrationDryRun($migration);
+            } else {
+                $this->rollbackMigration($migration);
+            }
+
+            $rolledBack[] = $migration;
+        }
+
+        return $rolledBack;
+    }
+
+    /**
+     * Migration'ı rollback et (dry-run)
+     */
+    private function rollbackMigrationDryRun(string $file): void
+    {
         $migration = $this->resolve($file);
 
-        // Transaction içinde çalıştır
-        $this->connection->beginTransaction();
+        $schema = new Schema($this->connection);
+        $schema->setDryRun(true);
+
+        $migration->down();
+
+        $statements = $schema->getPreviewSql();
+
+        $this->previewSql[$file] = $statements;
+    }
+
+    /**
+     * Migration'ı rollback et (gerçek)
+     */
+    private function rollbackMigration(string $file): void
+    {
+        $migration = $this->resolve($file);
 
         try {
-            // down() metodunu çalıştır
+            $this->connection->beginTransaction();
+
             $migration->down();
 
-            // Log'dan sil
             $this->repository->delete($file);
 
             $this->connection->commit();
-        } catch (\Exception $e) {
-            $this->connection->rollback();
-            throw new \RuntimeException(
-                "Rollback failed: {$file}\nError: {$e->getMessage()}",
-                0,
-                $e
+
+        } catch (PDOException $e) {
+            $this->connection->rollBack();
+            throw new MigrationException(
+                "Rollback failed: {$file}. Error: " . $e->getMessage()
             );
         }
     }
 
     /**
-     * Rollback all migrations
+     * Tüm migration'ları rollback et
      *
-     * @return array<string> Rollback edilen migration'lar
+     * @return array Rollback edilen migration'lar
      */
     public function reset(): array
     {
-        if (!$this->repository->repositoryExists()) {
-            $this->note('Migration table does not exist.');
+        $migrations = array_reverse($this->repository->getRan());
+
+        if (empty($migrations)) {
             return [];
         }
 
-        $rolled = [];
-        $step = 1;
+        $rolledBack = [];
 
-        $this->note('Rolling back all migrations...');
-
-        while ($migrations = $this->repository->getLastBatch()) {
-            $batch = $this->repository->getLastBatchNumber();
-            $this->note("Rolling back batch #{$batch}...");
-
-            foreach ($migrations as $file) {
-                $this->rollbackMigration($file);
-                $rolled[] = $file;
-                $this->note("Rolled back: {$file}");
-            }
-
-            $step++;
-
-            // Sonsuz loop önleme (safety check)
-            if ($step > 1000) {
-                throw new \RuntimeException('Too many rollback steps. Possible infinite loop.');
-            }
+        foreach ($migrations as $migration) {
+            $this->rollbackMigration($migration);
+            $rolledBack[] = $migration;
         }
 
-        return $rolled;
-    }
-
-    /**
-     * Drop all tables and re-run all migrations
-     *
-     * @return array<string> Çalıştırılan migration'lar
-     */
-    public function fresh(): array
-    {
-        $this->note('Dropping all tables...');
-
-        // Tüm migration'ları rollback et
-        $this->reset();
-
-        // Migration tablosunu da sil
-        if ($this->repository->repositoryExists()) {
-            Schema::dropIfExists($this->repository->getTable());
-            $this->note('Migration table dropped.');
-        }
-
-        $this->note('Running all migrations...');
-
-        // Tüm migration'ları yeniden çalıştır
-        return $this->run();
-    }
-
-    /**
-     * Get migration status
-     *
-     * @return array<array{name: string, batch: int|null, ran: bool}>
-     */
-    public function status(): array
-    {
-        if (!$this->repository->repositoryExists()) {
-            return [];
-        }
-
-        $ran = $this->repository->getAllMigrations();
-        $all = $this->repository->getMigrations($this->path);
-
-        $ranMap = [];
-        foreach ($ran as $migration) {
-            $ranMap[$migration['migration']] = (int) $migration['batch'];
-        }
-
-        $status = [];
-
-        foreach ($all as $migration) {
-            $status[] = [
-                'name' => $migration,
-                'batch' => $ranMap[$migration] ?? null,
-                'ran' => isset($ranMap[$migration]),
-            ];
-        }
-
-        return $status;
-    }
-
-    /**
-     * Get pending migrations count
-     *
-     * @return int
-     */
-    public function getPendingCount(): int
-    {
-        if (!$this->repository->repositoryExists()) {
-            return count($this->repository->getMigrations($this->path));
-        }
-
-        return count($this->repository->getPending($this->path));
-    }
-
-    /**
-     * Resolve migration instance from file
-     *
-     * @param string $file Migration dosya adı (uzantısız)
-     * @return Migration
-     * @throws \RuntimeException Dosya bulunamazsa veya geçersiz migration
-     */
-    protected function resolve(string $file): Migration
-    {
-        $path = $this->path . '/' . $file . '.php';
-
-        if (!file_exists($path)) {
-            throw new \RuntimeException("Migration file not found: {$path}");
-        }
-
-        $migration = require $path;
-
-        if (!$migration instanceof Migration) {
-            throw new \RuntimeException(
-                "Migration file must return a Migration instance: {$file}\n" .
-                "Expected: return new class extends Migration { ... }"
-            );
-        }
-
-        return $migration;
-    }
-
-    /**
-     * Set output callback (CLI için)
-     *
-     * @param \Closure $callback function(string $message): void
-     * @return void
-     */
-    public function setOutput(\Closure $callback): void
-    {
-        $this->output = $callback;
-    }
-
-    /**
-     * Output a note/message
-     *
-     * @param string $message
-     * @return void
-     */
-    protected function note(string $message): void
-    {
-        if ($this->output) {
-            ($this->output)($message);
-        }
-    }
-
-    /**
-     * Get repository
-     *
-     * @return MigrationRepository
-     */
-    public function getRepository(): MigrationRepository
-    {
-        return $this->repository;
-    }
-
-    /**
-     * Get migration path
-     *
-     * @return string
-     */
-    public function getPath(): string
-    {
-        return $this->path;
-    }
-
-    /**
-     * Set migration path
-     *
-     * @param string $path
-     * @return void
-     */
-    public function setPath(string $path): void
-    {
-        $this->path = $path;
+        return $rolledBack;
     }
 }
