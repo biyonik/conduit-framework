@@ -189,7 +189,20 @@ trait FiresEvents
 
         // Event listener'lar yoksa devam et
         if (!isset(static::$eventListeners[$class][$event])) {
-            return true;
+            // Check if global event dispatcher is available
+            if (!function_exists('app') || !app()->bound(\Conduit\Events\Contracts\EventDispatcherInterface::class)) {
+                return true;
+            }
+            
+            // Dispatch through global event dispatcher
+            $dispatcher = app(\Conduit\Events\Contracts\EventDispatcherInterface::class);
+            $result = $dispatcher->dispatch(
+                "eloquent.{$event}: " . static::class,
+                $this
+            );
+            
+            // If any listener returns false, cancel operation
+            return !in_array(false, $result, true);
         }
 
         // Her listener'ı çağır
@@ -198,6 +211,20 @@ trait FiresEvents
 
             // Eğer listener false dönerse, operation'ı iptal et
             if ($result === false) {
+                return false;
+            }
+        }
+
+        // Also dispatch through global event dispatcher if available
+        if (function_exists('app') && app()->bound(\Conduit\Events\Contracts\EventDispatcherInterface::class)) {
+            $dispatcher = app(\Conduit\Events\Contracts\EventDispatcherInterface::class);
+            $result = $dispatcher->dispatch(
+                "eloquent.{$event}: " . static::class,
+                $this
+            );
+            
+            // If any listener returns false, cancel operation
+            if (in_array(false, $result, true)) {
                 return false;
             }
         }
