@@ -1,0 +1,36 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Models;
+
+use Conduit\Database\Model;
+
+class User extends Model
+{
+    /**
+     * The table associated with the model.
+     */
+    protected string $table = 'users';
+    
+    /**
+     * The attributes that are mass assignable.
+     * 
+     * @var array<string>
+     */
+    protected array $fillable = [];
+    
+    /**
+     * The attributes that should be hidden for serialization.
+     * 
+     * @var array<string>
+     */
+    protected array $hidden = [];
+    
+    /**
+     * The attributes that should be cast.
+     * 
+     * @var array<string, string>
+     */
+    protected array $casts = [];
+}

@@ -1,0 +1,48 @@
+#!/usr/bin/env php
+<?php
+
+/**
+ * Conduit Framework - Console Entry Point
+ */
+
+define('CONDUIT_START', microtime(true));
+
+// Autoloader
+require __DIR__ . '/vendor/autoload.php';
+
+// Bootstrap application
+$app = require __DIR__ . '/bootstrap/app.php';
+
+// Create console kernel
+$console = new \Conduit\Console\Application($app);
+
+// Register built-in commands
+$console->add(new \Conduit\Console\Commands\ListCommand());
+$console->add(new \Conduit\Console\Commands\CacheClearCommand());
+$console->add(new \Conduit\Console\Commands\ConfigCacheCommand());
+$console->add(new \Conduit\Console\Commands\ConfigClearCommand());
+$console->add(new \Conduit\Console\Commands\RouteCacheCommand());
+$console->add(new \Conduit\Console\Commands\RouteClearCommand());
+$console->add(new \Conduit\Console\Commands\ContainerCompileCommand());
+$console->add(new \Conduit\Console\Commands\OptimizeCommand());
+$console->add(new \Conduit\Console\Commands\MakeControllerCommand());
+$console->add(new \Conduit\Console\Commands\MakeModelCommand());
+$console->add(new \Conduit\Console\Commands\MakeMiddlewareCommand());
+$console->add(new \Conduit\Console\Commands\MakeCommandCommand());
+
+// User commands
+$userCommandsPath = $app->basePath('app/Console/Commands');
+if (is_dir($userCommandsPath)) {
+    $commandFiles = glob($userCommandsPath . '/*.php');
+    if ($commandFiles !== false) {
+        foreach ($commandFiles as $file) {
+            $class = 'App\\Console\\Commands\\' . basename($file, '.php');
+            if (class_exists($class)) {
+                $console->add(new $class());
+            }
+        }
+    }
+}
+
+// Run
+exit($console->run());
