@@ -51,10 +51,12 @@ $app->singleton(
 // ============================================
 // Register Service Providers
 // ============================================
+$app->register(new Conduit\Events\EventServiceProvider($app));
 $app->register(new Conduit\Routing\RoutingServiceProvider($app));
 $app->register(new Conduit\Database\DatabaseServiceProvider($app));
 $app->register(new Conduit\Cache\CacheServiceProvider($app));
 $app->register(new Conduit\Security\Auth\AuthServiceProvider($app));
+$app->register(new Conduit\Validation\ValidationServiceProvider($app));
 
 // ============================================
 // Register Error Handler
