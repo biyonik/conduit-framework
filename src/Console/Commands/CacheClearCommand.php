@@ -43,13 +43,15 @@ class CacheClearCommand extends Command
         $cacheDir = storage_path('cache');
         if (is_dir($cacheDir)) {
             $cacheFiles = glob($cacheDir . '/*');
+            $deletedCount = 0;
             if ($cacheFiles !== false) {
                 foreach ($cacheFiles as $file) {
                     if (is_file($file) && basename($file) !== '.gitkeep') {
                         unlink($file);
+                        $deletedCount++;
                     }
                 }
-                if (!empty($cacheFiles)) {
+                if ($deletedCount > 0) {
                     $cleared[] = 'application';
                 }
             }

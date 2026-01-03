@@ -196,7 +196,7 @@ class ConsoleOutput implements OutputInterface
         }
         
         // Replace custom tags
-        $message = preg_replace_callback(
+        return preg_replace_callback(
             '/<(\w+)>(.*?)<\/\1>/',
             function ($matches) {
                 $tag = $matches[1];
@@ -210,9 +210,7 @@ class ConsoleOutput implements OutputInterface
                 return $text;
             },
             $message
-        );
-        
-        return $message ?? '';
+        ) ?? $message;
     }
     
     /**

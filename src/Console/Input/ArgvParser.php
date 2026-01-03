@@ -94,9 +94,12 @@ class ArgvParser
     protected function parseShortOption(string $option, array &$options): void
     {
         // For simplicity, treat each character as a boolean flag
-        $length = strlen($option);
+        $length = mb_strlen($option);
         for ($i = 0; $i < $length; $i++) {
-            $options[$option[$i]] = true;
+            $char = mb_substr($option, $i, 1);
+            if ($char !== false) {
+                $options[$char] = true;
+            }
         }
     }
 }
