@@ -208,21 +208,102 @@ class Kernel implements KernelInterface
      * 
      * @param RequestInterface $request
      * @return ResponseInterface
+     * @throws \Conduit\Http\Exceptions\NotFoundHttpException
+     * @throws \Conduit\Http\Exceptions\MethodNotAllowedException
      */
     protected function dispatchToRouter(RequestInterface $request): ResponseInterface
     {
         // Router'ı container'dan al
-        // Router henüz oluşturulmadı, ama ileride eklenecek
+        $router = $this->container->make(\Conduit\Routing\Router::class);
         
-        // Şimdilik basit bir response dön (placeholder)
-        // TODO: Router implementasyonu eklendiğinde bu değişecek
+        try {
+            // Route match et
+            $route = $router->matchRoute($request);
+            
+            if ($route === null) {
+                throw new \Conduit\Http\Exceptions\NotFoundHttpException(
+                    "Route not found: {$request->method()} {$request->path()}"
+                );
+            }
+            
+            // Route middleware'leri al
+            $routeMiddleware = $route->getMiddleware();
+            
+            // Route action'ı çalıştır
+            return $this->runRouteAction($route, $request);
+            
+        } catch (\Conduit\Routing\Exceptions\MethodNotAllowedException $e) {
+            // Convert to HTTP exception
+            throw new \Conduit\Http\Exceptions\MethodNotAllowedException($e->getMessage());
+        }
+    }
+
+    /**
+     * Route action'ı çalıştır
+     * 
+     * @param \Conduit\Routing\Route $route
+     * @param RequestInterface $request
+     * @return ResponseInterface
+     */
+    protected function runRouteAction(\Conduit\Routing\Route $route, RequestInterface $request): ResponseInterface
+    {
+        $action = $route->getAction();
+        $parameters = $route->getParameters();
         
-        return new JsonResponse([
-            'message' => 'Kernel is working! Router not yet implemented.',
-            'method' => $request->method(),
-            'path' => $request->path(),
-            'timestamp' => time(),
-        ]);
+        // Closure ise direkt çağır
+        if ($action instanceof Closure) {
+            $result = $this->container->call($action, $parameters);
+            return $this->prepareResponse($result);
+        }
+        
+        // Controller@method formatı
+        if (is_string($action) && str_contains($action, '@')) {
+            [$controller, $method] = explode('@', $action, 2);
+            $controllerInstance = $this->container->make($controller);
+            $result = $this->container->call([$controllerInstance, $method], $parameters);
+            return $this->prepareResponse($result);
+        }
+        
+        // Invokable controller
+        if (is_string($action)) {
+            $controllerInstance = $this->container->make($action);
+            $result = $this->container->call($controllerInstance, $parameters);
+            return $this->prepareResponse($result);
+        }
+        
+        throw new \RuntimeException('Invalid route action');
+    }
+
+    /**
+     * Response'u hazırla
+     * 
+     * @param mixed $result Action sonucu
+     * @return ResponseInterface
+     */
+    protected function prepareResponse(mixed $result): ResponseInterface
+    {
+        // Zaten Response ise direkt dön
+        if ($result instanceof ResponseInterface) {
+            return $result;
+        }
+        
+        // Array veya object ise JSON response
+        if (is_array($result) || is_object($result)) {
+            return new JsonResponse($result);
+        }
+        
+        // String ise text response
+        if (is_string($result)) {
+            return new Response($result);
+        }
+        
+        // Null ise boş response
+        if ($result === null) {
+            return new Response('', 204);
+        }
+        
+        // Diğer durumlar için string'e çevir
+        return new Response((string) $result);
     }
 
     /**

@@ -11,11 +11,23 @@
 use Conduit\Core\Application;
 
 // ============================================
-// Create Application Instance
+// 1. ÖNCE .env yükle
+// ============================================
+if (file_exists(dirname(__DIR__) . '/.env')) {
+    \Conduit\Support\Dotenv::load(dirname(__DIR__));
+}
+
+// ============================================
+// 2. Create Application Instance
 // ============================================
 $app = new Application(
     basePath: dirname(__DIR__)
 );
+
+// ============================================
+// 3. SONRA config yükle (artık env() çalışır)
+// ============================================
+$app->loadConfiguration();
 
 // ============================================
 // Bind Important Interfaces
@@ -43,7 +55,6 @@ $app->register(new Conduit\Routing\RoutingServiceProvider($app));
 $app->register(new Conduit\Database\DatabaseServiceProvider($app));
 $app->register(new Conduit\Cache\CacheServiceProvider($app));
 $app->register(new Conduit\Security\Auth\AuthServiceProvider($app));
-$app->register(new Conduit\Validation\ValidationServiceProvider($app));
 
 // ============================================
 // Register Error Handler
@@ -56,18 +67,6 @@ $app->singleton(
 set_error_handler([app(Conduit\Exceptions\Handler::class), 'handleError']);
 set_exception_handler([app(Conduit\Exceptions\Handler::class), 'handleException']);
 register_shutdown_function([app(Conduit\Exceptions\Handler::class), 'handleShutdown']);
-
-// ============================================
-// Load Configuration
-// ============================================
-$app->loadConfiguration();
-
-// ============================================
-// Load Environment Variables
-// ============================================
-if (file_exists(dirname(__DIR__) . '/.env')) {
-    $dotenv = Conduit\Support\Dotenv::load(dirname(__DIR__));
-}
 
 // ============================================
 // Return Application

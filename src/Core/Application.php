@@ -185,6 +185,17 @@ class Application implements ApplicationInterface
     }
 
     /**
+     * Resource path'ini döndür
+     * 
+     * @param string $path
+     * @return string
+     */
+    public function resourcePath(string $path = ''): string
+    {
+        return $this->basePath('resources') . ($path ? DIRECTORY_SEPARATOR . $path : '');
+    }
+
+    /**
      * Core binding'leri kaydet
      * 
      * @return void
@@ -230,8 +241,8 @@ class Application implements ApplicationInterface
             // Diğer alias'lar katmanlar tamamlanınca eklenecek
         ];
 
-        foreach ($aliases as $key => $aliases) {
-            foreach ($aliases as $alias) {
+        foreach ($aliases as $key => $aliasArray) {
+            foreach ($aliasArray as $alias) {
                 $this->container->alias($key, $alias);
             }
         }
