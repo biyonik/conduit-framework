@@ -252,7 +252,7 @@ class Kernel implements KernelInterface
         
         // Closure ise direkt çağır
         if ($action instanceof Closure) {
-            $result = $this->container->call($action, $parameters);
+            $result = $action(...array_values($parameters));
             return $this->prepareResponse($result);
         }
         
@@ -260,14 +260,14 @@ class Kernel implements KernelInterface
         if (is_string($action) && str_contains($action, '@')) {
             [$controller, $method] = explode('@', $action, 2);
             $controllerInstance = $this->container->make($controller);
-            $result = $this->container->call([$controllerInstance, $method], $parameters);
+            $result = $controllerInstance->$method(...array_values($parameters));
             return $this->prepareResponse($result);
         }
         
         // Invokable controller
         if (is_string($action)) {
             $controllerInstance = $this->container->make($action);
-            $result = $this->container->call($controllerInstance, $parameters);
+            $result = $controllerInstance(...array_values($parameters));
             return $this->prepareResponse($result);
         }
         

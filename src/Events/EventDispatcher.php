@@ -270,11 +270,9 @@ class EventDispatcher implements EventDispatcherInterface
     protected function matchesWildcard(string $event, string $pattern): bool
     {
         // Convert wildcard pattern to regex
-        $regex = str_replace(
-            ['*', '.'],
-            ['.*', '\.'],
-            $pattern
-        );
+        // First escape dots, then replace asterisks
+        $regex = preg_quote($pattern, '/');
+        $regex = str_replace('\*', '.*', $regex);
 
         return (bool) preg_match('/^' . $regex . '$/', $event);
     }

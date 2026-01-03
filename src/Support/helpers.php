@@ -131,6 +131,19 @@ if (!function_exists('public_path')) {
     }
 }
 
+if (!function_exists('database_path')) {
+    /**
+     * Get the database path of the application
+     * 
+     * @param string $path Path to append
+     * @return string
+     */
+    function database_path(string $path = ''): string
+    {
+        return app()->databasePath($path);
+    }
+}
+
 if (!function_exists('event')) {
     /**
      * Dispatch an event

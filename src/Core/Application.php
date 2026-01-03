@@ -36,6 +36,13 @@ class Application implements ApplicationInterface
     public const VERSION = '1.0.0';
 
     /**
+     * Static application instance
+     * 
+     * @var self|null
+     */
+    protected static ?self $instance = null;
+
+    /**
      * Application base path
      * 
      * @var string
@@ -112,6 +119,24 @@ class Application implements ApplicationInterface
         $this->registerBaseBindings();
         $this->registerBaseServiceProviders();
         $this->registerCoreContainerAliases();
+        
+        // Set static instance
+        static::$instance = $this;
+    }
+
+    /**
+     * Get the globally available instance of the application
+     * 
+     * @return self
+     * @throws \RuntimeException If no instance is available
+     */
+    public static function getInstance(): self
+    {
+        if (static::$instance === null) {
+            throw new \RuntimeException('Application instance not available. Create an Application instance first.');
+        }
+        
+        return static::$instance;
     }
 
     /**
@@ -321,7 +346,7 @@ class Application implements ApplicationInterface
      * 
      * @return void
      */
-    protected function loadConfiguration(): void
+    public function loadConfiguration(): void
     {
         $configPath = $this->configPath();
 
