@@ -116,6 +116,7 @@ return [
         \Conduit\Cache\CacheServiceProvider::class,
         \Conduit\Security\SecurityServiceProvider::class,
         \Conduit\Validation\ValidationServiceProvider::class,
+        \Conduit\Queue\QueueServiceProvider::class,
 
         // Application Providers (User)
         // \App\Providers\AuthServiceProvider::class,

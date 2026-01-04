@@ -75,4 +75,11 @@ $router->group(['prefix' => 'api'], function (Router $router) {
             ]
         ];
     })->name('api.posts.comments');
+    
+    // Queue routes (for external cron services)
+    $router->post('/queue/process', [\Conduit\Queue\QueueController::class, 'process'])
+        ->name('api.queue.process');
+    
+    $router->get('/queue/stats', [\Conduit\Queue\QueueController::class, 'stats'])
+        ->name('api.queue.stats');
 });
