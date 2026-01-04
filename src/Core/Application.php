@@ -231,6 +231,18 @@ class Application implements ApplicationInterface
     {
         // Use specified container class or default to Container
         $containerClass = $containerClass ?? Container::class;
+        
+        // Validate container class
+        if (!class_exists($containerClass)) {
+            throw new \InvalidArgumentException("Container class does not exist: {$containerClass}");
+        }
+        
+        if (!is_subclass_of($containerClass, ContainerInterface::class) && $containerClass !== Container::class) {
+            throw new \InvalidArgumentException(
+                "Container class must implement ContainerInterface: {$containerClass}"
+            );
+        }
+        
         $this->container = new $containerClass();
         
         // Container'ı kendisine bind et (singleton)

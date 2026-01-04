@@ -184,18 +184,40 @@ class ContainerCompiler
         
         $code = $this->generateCode($compiled);
         
-        $tempFile = $path . '.' . uniqid('', true) . '.tmp';
+        // Use tempnam for secure temp file creation
+        $tempFile = tempnam($dir, 'container_');
         
-        file_put_contents($tempFile, $code, LOCK_EX);
-        rename($tempFile, $path);
-        
-        // OPcache optimization
-        if (function_exists('opcache_invalidate')) {
-            opcache_invalidate($path, true);
+        if ($tempFile === false) {
+            throw new \RuntimeException("Failed to create temporary file in: {$dir}");
         }
         
-        if (function_exists('opcache_compile_file')) {
-            opcache_compile_file($path);
+        try {
+            // Write to temp file
+            $result = file_put_contents($tempFile, $code, LOCK_EX);
+            
+            if ($result === false) {
+                throw new \RuntimeException("Failed to write container cache to: {$tempFile}");
+            }
+            
+            // Atomic rename
+            if (!rename($tempFile, $path)) {
+                throw new \RuntimeException("Failed to move container cache to: {$path}");
+            }
+            
+            // OPcache optimization
+            if (function_exists('opcache_invalidate')) {
+                @opcache_invalidate($path, true);
+            }
+            
+            if (function_exists('opcache_compile_file')) {
+                @opcache_compile_file($path);
+            }
+        } catch (\Throwable $e) {
+            // Clean up temp file on error
+            if (file_exists($tempFile)) {
+                @unlink($tempFile);
+            }
+            throw $e;
         }
     }
     

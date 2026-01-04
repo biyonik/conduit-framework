@@ -26,13 +26,6 @@ class CompiledContainer extends Container
         
         $this->compiled = require $path;
         $this->isCompiled = true;
-        
-        // Register singletons
-        foreach ($this->compiled['singletons'] ?? [] as $abstract) {
-            if (!isset($this->instances[$abstract])) {
-                $this->instances[$abstract] = null; // Mark as singleton
-            }
-        }
     }
     
     /**
@@ -56,8 +49,8 @@ class CompiledContainer extends Container
     {
         $binding = $this->compiled['bindings'][$abstract];
         
-        // Check if singleton already instantiated
-        if ($binding['shared'] && isset($this->instances[$abstract]) && $this->instances[$abstract] !== null) {
+        // Check if singleton already instantiated (avoid checking null)
+        if ($binding['shared'] && isset($this->instances[$abstract])) {
             return $this->instances[$abstract];
         }
         
