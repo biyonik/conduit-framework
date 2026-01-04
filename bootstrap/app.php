@@ -50,9 +50,7 @@ $app->singleton(
     Conduit\Routing\Router::class
 );
 
-$app->singleton(
-    Conduit\Database\Connection::class
-);
+// Connection will be registered by DatabaseServiceProvider
 
 // ============================================
 // Register Service Providers
@@ -61,6 +59,7 @@ $app->register(\Conduit\Events\EventServiceProvider::class);
 $app->register(\Conduit\Routing\RouteServiceProvider::class);
 $app->register(\Conduit\Database\DatabaseServiceProvider::class);
 $app->register(\Conduit\Validation\ValidationServiceProvider::class);
+$app->register(\Conduit\Queue\QueueServiceProvider::class);
 // Cache and Auth providers will be added when those modules are implemented
 
 // ============================================

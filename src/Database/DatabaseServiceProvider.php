@@ -42,11 +42,16 @@ class DatabaseServiceProvider extends ServiceProvider
                 throw new \RuntimeException("Database connection [{$default}] not configured.");
             }
 
-            return $factory->make($connectionConfig);
+            return $factory->make($default, $connectionConfig);
         });
 
-        // Alias: 'db' → 'db.connection'
-        $this->app->alias('db', 'db.connection');
+        // Alias: 'db.connection' → 'db'
+        $this->app->alias('db.connection', 'db');
+        
+        // Bind Connection class to 'db.connection'
+        $this->app->singleton(Connection::class, function ($app) {
+            return $app->make('db.connection');
+        });
 
         // MigrationRepository'yi singleton olarak kaydet
         $this->app->singleton(MigrationRepository::class, function ($app) {
@@ -63,6 +68,11 @@ class DatabaseServiceProvider extends ServiceProvider
             $path = $app->basePath('database/migrations');
 
             return new Migrator($connection, $repository, $path);
+        });
+        
+        // Register Schema
+        $this->app->singleton(Schema::class, function ($app) {
+            return new Schema($app->make(Connection::class));
         });
     }
 

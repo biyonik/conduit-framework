@@ -19,6 +19,11 @@ use Conduit\Database\Exceptions\QueryException;
 class Schema
 {
     /**
+     * Static connection instance for facade pattern
+     */
+    private static ?Connection $staticConnection = null;
+
+    /**
      * Dry-run mode aktif mi?
      */
     private bool $dryRun = false;
@@ -31,6 +36,25 @@ class Schema
     public function __construct(
         private Connection $connection
     ) {}
+
+    /**
+     * Set static connection for facade pattern
+     */
+    public static function setConnection(Connection $connection): void
+    {
+        self::$staticConnection = $connection;
+    }
+
+    /**
+     * Get schema instance
+     */
+    private static function getInstance(): self
+    {
+        if (self::$staticConnection === null) {
+            self::$staticConnection = app('db.connection');
+        }
+        return new self(self::$staticConnection);
+    }
 
     /**
      * Dry-run mode'u aktif et
@@ -275,5 +299,13 @@ class Schema
         }
 
         return [];
+    }
+
+    /**
+     * Handle static method calls
+     */
+    public static function __callStatic(string $method, array $arguments)
+    {
+        return self::getInstance()->$method(...$arguments);
     }
 }
