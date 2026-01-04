@@ -9,6 +9,7 @@
  */
 
 use Conduit\Core\Application;
+use Conduit\Core\CompiledContainer;
 
 // ============================================
 // 1. ÖNCE .env yükle
@@ -18,11 +19,20 @@ if (file_exists(dirname(__DIR__) . '/.env')) {
 }
 
 // ============================================
-// 2. Create Application Instance
+// 2. Create Application Instance with CompiledContainer
 // ============================================
 $app = new Application(
-    basePath: dirname(__DIR__)
+    basePath: dirname(__DIR__),
+    containerClass: CompiledContainer::class
 );
+
+// ============================================
+// 2.1. Load compiled container if available
+// ============================================
+$containerCache = $app->basePath('bootstrap/cache/container.php');
+if (file_exists($containerCache)) {
+    $app->getContainer()->loadCompiled($containerCache);
+}
 
 // ============================================
 // 3. SONRA config yükle (artık env() çalışır)
