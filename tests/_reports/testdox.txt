@@ -1,11 +1,11 @@
 Rate Limiter (Tests\Unit\RateLimiter\RateLimiter)
- [x] Attempt blocks when exceeded
- [x] Retry after
- [x] Too many attempts
- [x] Available in
+ [x] Clear
  [x] Remaining
  [x] Attempt allows within limit
- [x] Clear
+ [x] Attempt blocks when exceeded
+ [x] Retry after
+ [x] Available in
+ [x] Too many attempts
 
 Array Storage (Tests\Unit\RateLimiter\Storage\ArrayStorage)
  [x] Forget removes key

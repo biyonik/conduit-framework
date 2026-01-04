@@ -53,18 +53,18 @@ class ArrayStorageTest extends TestCase
     
     public function testCleanupRemovesExpiredEntries(): void
     {
-        // Create entry that expires in 0 seconds (immediately expired)
-        $this->storage->increment('expired-key', 0);
+        // Create entry with very short expiry (1 second)
+        $this->storage->increment('short-lived-key', 1);
         
-        // Wait a moment to ensure it's expired
-        sleep(1);
-        
-        // Create a valid entry
+        // Create a valid entry with longer expiry
         $this->storage->increment('valid-key', 60);
+        
+        // Wait for short expiry to pass
+        sleep(2);
         
         $this->storage->cleanup();
         
-        $this->assertNull($this->storage->get('expired-key'));
+        $this->assertNull($this->storage->get('short-lived-key'));
         $this->assertNotNull($this->storage->get('valid-key'));
     }
 }

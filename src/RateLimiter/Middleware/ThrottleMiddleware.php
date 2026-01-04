@@ -9,7 +9,6 @@ use Conduit\Http\Request;
 use Conduit\Http\Response;
 use Conduit\Http\JsonResponse;
 use Conduit\RateLimiter\RateLimiter;
-use Conduit\RateLimiter\Exceptions\TooManyRequestsException;
 use Conduit\Middleware\MiddlewareInterface;
 
 class ThrottleMiddleware implements MiddlewareInterface
