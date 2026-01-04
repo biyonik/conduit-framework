@@ -18,7 +18,7 @@ $router->get('/', function () {
         'version' => '1.0.0',
         'docs' => 'https://github.com/biyonik/conduit-framework'
     ];
-})->name('home');
+});
 
 // Health check
 $router->get('/health', function () {
@@ -26,4 +26,4 @@ $router->get('/health', function () {
         'status' => 'ok',
         'timestamp' => time()
     ];
-})->name('health');
+});

@@ -23,6 +23,7 @@ $console->add(new \Conduit\Console\Commands\ConfigCacheCommand());
 $console->add(new \Conduit\Console\Commands\ConfigClearCommand());
 $console->add(new \Conduit\Console\Commands\RouteCacheCommand());
 $console->add(new \Conduit\Console\Commands\RouteClearCommand());
+$console->add(new \Conduit\Console\Commands\RouteListCommand());
 $console->add(new \Conduit\Console\Commands\ContainerCompileCommand());
 $console->add(new \Conduit\Console\Commands\OptimizeCommand());
 $console->add(new \Conduit\Console\Commands\MakeControllerCommand());

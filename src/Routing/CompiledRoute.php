@@ -17,7 +17,7 @@ class CompiledRoute
         public readonly string $uri,
         public readonly string $regex,
         public readonly array $parameters,
-        public readonly string|array|callable $action,
+        public readonly string|array $action,
         public readonly array $middleware,
         public readonly ?string $name,
         public readonly ?string $domain,
