@@ -138,8 +138,26 @@ class Kernel implements KernelInterface
     {
         // Application bootstrap (environment, config, providers, etc.)
         $this->app->bootstrap();
+        
+        // Load route cache if available (production)
+        $this->loadRouteCache();
 
         $this->bootstrapped = true;
+    }
+    
+    /**
+     * Load route cache if it exists
+     * 
+     * @return void
+     */
+    protected function loadRouteCache(): void
+    {
+        $routeCache = $this->app->basePath('bootstrap/cache/routes.php');
+        
+        if (file_exists($routeCache)) {
+            $router = $this->container->make(\Conduit\Routing\Router::class);
+            $router->loadCompiledCache($routeCache);
+        }
     }
 
     /**
