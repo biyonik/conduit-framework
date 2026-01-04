@@ -132,4 +132,7 @@ yarn-error.log*
 # Framework Specific
 # ============================================
 # Keep empty directories
-!.gitkeep/test_route_cache.php
+!.gitkeep
+
+# Temporary test files
+/test_route_cache.php

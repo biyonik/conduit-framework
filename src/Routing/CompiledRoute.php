@@ -42,15 +42,16 @@ class CompiledRoute
         // Extract parameters
         array_shift($matches); // Remove full match
         
-        // Filter out empty optional parameters
-        $matches = array_filter($matches, fn($match) => $match !== '');
-        
         $parameters = [];
-        if (!empty($this->parameters) && !empty($matches)) {
-            // Combine parameter names with values
-            $paramCount = min(count($this->parameters), count($matches));
-            for ($i = 0; $i < $paramCount; $i++) {
-                $parameters[$this->parameters[$i]] = $matches[$i];
+        if (!empty($this->parameters)) {
+            // Map parameter names to their captured values
+            // Skip empty matches (from optional parameters not provided)
+            $matchIndex = 0;
+            foreach ($this->parameters as $paramName) {
+                if (isset($matches[$matchIndex]) && $matches[$matchIndex] !== '') {
+                    $parameters[$paramName] = $matches[$matchIndex];
+                }
+                $matchIndex++;
             }
         }
         
