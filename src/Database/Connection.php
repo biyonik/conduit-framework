@@ -374,6 +374,49 @@ class Connection implements ConnectionInterface
     }
 
     /**
+     * Get Query Builder for a table
+     * 
+     * @param string $table Table name
+     * @return QueryBuilder
+     */
+    public function table(string $table): QueryBuilder
+    {
+        return (new QueryBuilder($this, $this->getGrammar()))->from($table);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function lastInsertId(): string
+    {
+        return (string) $this->getPdo()->lastInsertId();
+    }
+
+    /**
+     * Execute closure in transaction
+     *
+     * Transaction içinde callback execute eder.
+     * Exception olursa otomatik rollback yapar.
+     *
+     * @param callable $callback Transaction içinde çalışacak kod
+     * @return mixed Callback'in return değeri
+     * @throws Throwable
+     */
+    public function transaction(callable $callback): mixed
+    {
+        $this->beginTransaction();
+
+        try {
+            $result = $callback($this);
+            $this->commit();
+            return $result;
+        } catch (Throwable $e) {
+            $this->rollback();
+            throw $e;
+        }
+    }
+
+    /**
      * QueryException oluştur
      *
      * @param PDOException $e PDO hatası

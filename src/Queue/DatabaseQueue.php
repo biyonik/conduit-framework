@@ -23,13 +23,14 @@ class DatabaseQueue implements QueueInterface
         $payload = $this->createPayload($job);
         $availableAt = time() + $job->delay;
         
-        $this->db->table($this->table)->insert([
-            'queue' => $job->queue,
-            'payload' => $payload,
-            'attempts' => 0,
-            'available_at' => $availableAt,
-            'created_at' => time(),
-            'reserved_at' => null,
+        $sql = 'INSERT INTO ' . $this->table . ' (queue, payload, attempts, available_at, created_at, reserved_at) VALUES (?, ?, ?, ?, ?, ?)';
+        $this->db->insert($sql, [
+            $job->queue,
+            $payload,
+            0,
+            $availableAt,
+            time(),
+            null,
         ]);
         
         return (int) $this->db->lastInsertId();
@@ -45,24 +46,20 @@ class DatabaseQueue implements QueueInterface
     {
         $queue = $queue ?? 'default';
         
-        $job = $this->db->table($this->table)
-            ->where('queue', $queue)
-            ->where('available_at', '<=', time())
-            ->whereNull('reserved_at')
-            ->orderBy('id', 'asc')
-            ->first();
+        // Use raw SQL to avoid QueryBuilder bug with GROUP BY
+        $sql = 'SELECT * FROM ' . $this->table . ' WHERE queue = ? AND available_at <= ? AND reserved_at IS NULL ORDER BY id ASC LIMIT 1';
+        $results = $this->db->select($sql, [$queue, time()]);
         
-        if (!$job) {
+        if (empty($results)) {
             return null;
         }
         
-        $affected = $this->db->table($this->table)
-            ->where('id', $job['id'])
-            ->whereNull('reserved_at')
-            ->update([
-                'reserved_at' => time(),
-                'attempts' => $job['attempts'] + 1,
-            ]);
+        $job = $results[0];
+        
+        $affected = $this->db->update(
+            'UPDATE ' . $this->table . ' SET reserved_at = ?, attempts = ? WHERE id = ? AND reserved_at IS NULL',
+            [time(), $job['attempts'] + 1, $job['id']]
+        );
         
         if ($affected === 0) {
             return $this->pop($queue);
@@ -75,99 +72,101 @@ class DatabaseQueue implements QueueInterface
     
     public function delete(int $jobId): void
     {
-        $this->db->table($this->table)
-            ->where('id', $jobId)
-            ->delete();
+        $this->db->delete('DELETE FROM ' . $this->table . ' WHERE id = ?', [$jobId]);
     }
     
     public function release(int $jobId, int $delay = 0): void
     {
-        $this->db->table($this->table)
-            ->where('id', $jobId)
-            ->update([
-                'reserved_at' => null,
-                'available_at' => time() + $delay,
-            ]);
+        $this->db->update(
+            'UPDATE ' . $this->table . ' SET reserved_at = ?, available_at = ? WHERE id = ?',
+            [null, time() + $delay, $jobId]
+        );
     }
     
     public function fail(array $job, \Throwable $exception): void
     {
-        $this->db->table($this->failedTable)->insert([
-            'queue' => $job['queue'],
-            'payload' => $job['payload'],
-            'exception' => $exception->getMessage() . "\n" . $exception->getTraceAsString(),
-            'failed_at' => time(),
-        ]);
+        $this->db->insert(
+            'INSERT INTO ' . $this->failedTable . ' (queue, payload, exception, failed_at) VALUES (?, ?, ?, ?)',
+            [
+                $job['queue'],
+                $job['payload'],
+                $exception->getMessage() . "\n" . $exception->getTraceAsString(),
+                time(),
+            ]
+        );
         
         $this->delete($job['id']);
     }
     
     public function size(?string $queue = null): int
     {
-        $query = $this->db->table($this->table);
+        $sql = 'SELECT COUNT(*) as count FROM ' . $this->table;
+        $bindings = [];
         
         if ($queue) {
-            $query->where('queue', $queue);
+            $sql .= ' WHERE queue = ?';
+            $bindings[] = $queue;
         }
         
-        return $query->count();
+        $result = $this->db->select($sql, $bindings);
+        return (int) $result[0]['count'];
     }
     
     public function pending(?string $queue = null): int
     {
-        $query = $this->db->table($this->table)
-            ->whereNull('reserved_at')
-            ->where('available_at', '<=', time());
+        $sql = 'SELECT COUNT(*) as count FROM ' . $this->table . ' WHERE reserved_at IS NULL AND available_at <= ?';
+        $bindings = [time()];
         
         if ($queue) {
-            $query->where('queue', $queue);
+            $sql .= ' AND queue = ?';
+            $bindings[] = $queue;
         }
         
-        return $query->count();
+        $result = $this->db->select($sql, $bindings);
+        return (int) $result[0]['count'];
     }
     
     public function failedCount(): int
     {
-        return $this->db->table($this->failedTable)->count();
+        $result = $this->db->select('SELECT COUNT(*) as count FROM ' . $this->failedTable);
+        return (int) $result[0]['count'];
     }
     
     public function failed(): array
     {
-        return $this->db->table($this->failedTable)
-            ->orderBy('failed_at', 'desc')
-            ->get()
-            ->toArray();
+        return $this->db->select('SELECT * FROM ' . $this->failedTable . ' ORDER BY failed_at DESC');
     }
     
     public function retry(int $failedJobId): bool
     {
-        $failed = $this->db->table($this->failedTable)
-            ->where('id', $failedJobId)
-            ->first();
+        $results = $this->db->select('SELECT * FROM ' . $this->failedTable . ' WHERE id = ?', [$failedJobId]);
         
-        if (!$failed) {
+        if (empty($results)) {
             return false;
         }
         
-        $this->db->table($this->table)->insert([
-            'queue' => $failed['queue'],
-            'payload' => $failed['payload'],
-            'attempts' => 0,
-            'available_at' => time(),
-            'created_at' => time(),
-            'reserved_at' => null,
-        ]);
+        $failed = $results[0];
         
-        $this->db->table($this->failedTable)
-            ->where('id', $failedJobId)
-            ->delete();
+        $this->db->insert(
+            'INSERT INTO ' . $this->table . ' (queue, payload, attempts, available_at, created_at, reserved_at) VALUES (?, ?, ?, ?, ?, ?)',
+            [
+                $failed['queue'],
+                $failed['payload'],
+                0,
+                time(),
+                time(),
+                null,
+            ]
+        );
+        
+        $this->db->delete('DELETE FROM ' . $this->failedTable . ' WHERE id = ?', [$failedJobId]);
         
         return true;
     }
     
     public function clearFailed(): int
     {
-        return $this->db->table($this->failedTable)->delete();
+        return $this->db->delete('DELETE FROM ' . $this->failedTable);
     }
     
     protected function createPayload(Job $job): string
