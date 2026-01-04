@@ -24,7 +24,7 @@ class QueueServiceProvider extends ServiceProvider
     {
         // Register DatabaseQueue
         $this->app->singleton(DatabaseQueue::class, function ($app) {
-            return new DatabaseQueue($app->make(Connection::class));
+            return new DatabaseQueue($app->make('db.connection'));
         });
         
         // Register QueueInterface binding

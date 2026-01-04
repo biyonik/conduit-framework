@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Conduit\Queue;
 
 use Conduit\Database\Connection;
+use Conduit\Database\QueryBuilder;
 use Conduit\Queue\Contracts\QueueInterface;
 
 /**
@@ -24,6 +25,25 @@ class DatabaseQueue implements QueueInterface
     }
     
     /**
+     * Create a query builder for a table
+     * 
+     * @param string $table
+     * @return QueryBuilder
+     */
+    protected function table(string $table): QueryBuilder
+    {
+        $driver = $this->db->getDriverName();
+        $grammar = match ($driver) {
+            'sqlite' => new \Conduit\Database\Grammar\SQLiteGrammar(),
+            'pgsql' => new \Conduit\Database\Grammar\PostgreSQLGrammar(),
+            default => new \Conduit\Database\Grammar\MySQLGrammar(),
+        };
+        
+        $qb = new QueryBuilder($this->db, $grammar);
+        return $qb->from($table);
+    }
+    
+    /**
      * Push a job onto the queue
      * 
      * @param Job $job
@@ -34,7 +54,7 @@ class DatabaseQueue implements QueueInterface
         $payload = $this->createPayload($job);
         $availableAt = time() + $job->delay;
         
-        $this->db->table($this->table)->insert([
+        $insertId = $this->table($this->table)->insert([
             'queue' => $job->queue,
             'payload' => $payload,
             'attempts' => 0,
@@ -43,7 +63,7 @@ class DatabaseQueue implements QueueInterface
             'reserved_at' => null,
         ]);
         
-        return (int) $this->db->lastInsertId();
+        return $insertId;
     }
     
     /**
@@ -68,21 +88,22 @@ class DatabaseQueue implements QueueInterface
     public function pop(?string $queue = null): ?array
     {
         $queue = $queue ?? 'default';
+        $time = time();
         
-        // Find available job
-        $job = $this->db->table($this->table)
-            ->where('queue', $queue)
-            ->where('available_at', '<=', time())
-            ->whereNull('reserved_at')
-            ->orderBy('id', 'asc')
-            ->first();
+        // Find available job using raw SQL to avoid Grammar bugs
+        $results = $this->db->select(
+            "SELECT * FROM {$this->table} WHERE queue = ? AND available_at <= ? AND reserved_at IS NULL ORDER BY id ASC LIMIT 1",
+            [$queue, $time]
+        );
         
-        if (!$job) {
+        if (empty($results)) {
             return null;
         }
         
+        $job = $results[0];
+        
         // Reserve the job (atomic update)
-        $affected = $this->db->table($this->table)
+        $affected = $this->table($this->table)
             ->where('id', $job['id'])
             ->whereNull('reserved_at')
             ->update([
@@ -108,7 +129,7 @@ class DatabaseQueue implements QueueInterface
      */
     public function delete(int $jobId): void
     {
-        $this->db->table($this->table)
+        $this->table($this->table)
             ->where('id', $jobId)
             ->delete();
     }
@@ -122,7 +143,7 @@ class DatabaseQueue implements QueueInterface
      */
     public function release(int $jobId, int $delay = 0): void
     {
-        $this->db->table($this->table)
+        $this->table($this->table)
             ->where('id', $jobId)
             ->update([
                 'reserved_at' => null,
@@ -140,7 +161,7 @@ class DatabaseQueue implements QueueInterface
     public function fail(array $job, \Throwable $exception): void
     {
         // Move to failed_jobs table
-        $this->db->table($this->failedTable)->insert([
+        $this->table($this->failedTable)->insert([
             'queue' => $job['queue'],
             'payload' => $job['payload'],
             'exception' => $exception->getMessage() . "\n" . $exception->getTraceAsString(),
@@ -159,13 +180,19 @@ class DatabaseQueue implements QueueInterface
      */
     public function size(?string $queue = null): int
     {
-        $query = $this->db->table($this->table);
-        
         if ($queue) {
-            $query->where('queue', $queue);
+            $result = $this->db->select(
+                "SELECT COUNT(*) as count FROM {$this->table} WHERE queue = ?",
+                [$queue]
+            );
+        } else {
+            $result = $this->db->select(
+                "SELECT COUNT(*) as count FROM {$this->table}",
+                []
+            );
         }
         
-        return $query->count();
+        return (int) ($result[0]['count'] ?? 0);
     }
     
     /**
@@ -176,15 +203,21 @@ class DatabaseQueue implements QueueInterface
      */
     public function pending(?string $queue = null): int
     {
-        $query = $this->db->table($this->table)
-            ->whereNull('reserved_at')
-            ->where('available_at', '<=', time());
+        $time = time();
         
         if ($queue) {
-            $query->where('queue', $queue);
+            $result = $this->db->select(
+                "SELECT COUNT(*) as count FROM {$this->table} WHERE queue = ? AND reserved_at IS NULL AND available_at <= ?",
+                [$queue, $time]
+            );
+        } else {
+            $result = $this->db->select(
+                "SELECT COUNT(*) as count FROM {$this->table} WHERE reserved_at IS NULL AND available_at <= ?",
+                [$time]
+            );
         }
         
-        return $query->count();
+        return (int) ($result[0]['count'] ?? 0);
     }
     
     /**
@@ -194,7 +227,12 @@ class DatabaseQueue implements QueueInterface
      */
     public function failedCount(): int
     {
-        return $this->db->table($this->failedTable)->count();
+        $result = $this->db->select(
+            "SELECT COUNT(*) as count FROM {$this->failedTable}",
+            []
+        );
+        
+        return (int) ($result[0]['count'] ?? 0);
     }
     
     /**
@@ -204,10 +242,12 @@ class DatabaseQueue implements QueueInterface
      */
     public function failed(): array
     {
-        return $this->db->table($this->failedTable)
-            ->orderBy('failed_at', 'desc')
-            ->get()
-            ->toArray();
+        $results = $this->db->select(
+            "SELECT * FROM {$this->failedTable} ORDER BY failed_at DESC",
+            []
+        );
+        
+        return $results;
     }
     
     /**
@@ -218,7 +258,7 @@ class DatabaseQueue implements QueueInterface
      */
     public function retry(int $failedJobId): bool
     {
-        $failed = $this->db->table($this->failedTable)
+        $failed = $this->table($this->failedTable)
             ->where('id', $failedJobId)
             ->first();
         
@@ -227,7 +267,7 @@ class DatabaseQueue implements QueueInterface
         }
         
         // Re-queue the job
-        $this->db->table($this->table)->insert([
+        $this->table($this->table)->insert([
             'queue' => $failed['queue'],
             'payload' => $failed['payload'],
             'attempts' => 0,
@@ -237,7 +277,7 @@ class DatabaseQueue implements QueueInterface
         ]);
         
         // Remove from failed
-        $this->db->table($this->failedTable)
+        $this->table($this->failedTable)
             ->where('id', $failedJobId)
             ->delete();
         
@@ -251,7 +291,7 @@ class DatabaseQueue implements QueueInterface
      */
     public function clearFailed(): int
     {
-        return $this->db->table($this->failedTable)->delete();
+        return $this->table($this->failedTable)->delete();
     }
     
     /**
