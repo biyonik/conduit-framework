@@ -1,23 +1,23 @@
 Array Storage (Tests\Unit\RateLimiter\Storage\ArrayStorage)
- [x] Forget removes key
  [x] Get returns null for non existent key
- [x] Increment creates new entry
  [x] Cleanup removes expired entries
+ [x] Increment creates new entry
+ [x] Forget removes key
  [x] Increment increments existing
 
 Rate Limiter Integration (Tests\Unit\RateLimiter\RateLimiterIntegration)
- [x] Different users independent limits
  [x] File storage persistence
- [x] Login brute force protection
  [x] Clearing specific user limit
  [x] Api rate limiting scenario
+ [x] Login brute force protection
+ [x] Different users independent limits
 
 Rate Limiter (Tests\Unit\RateLimiter\RateLimiter)
- [x] Attempt allows within limit
- [x] Available in
- [x] Too many attempts
- [x] Retry after
  [x] Remaining
- [x] Attempt blocks when exceeded
+ [x] Too many attempts
+ [x] Attempt allows within limit
+ [x] Retry after
+ [x] Available in
  [x] Clear
+ [x] Attempt blocks when exceeded
 
