@@ -57,6 +57,12 @@ class Router implements RouterInterface
     /** @var bool Route collection değişti mi? */
     private bool $routesChanged = true;
     
+    /** @var array<CompiledRoute>|null Cached compiled routes for fast matching */
+    private ?array $cachedCompiledRoutes = null;
+    
+    /** @var bool Is route cache enabled? */
+    private bool $cacheEnabled = false;
+    
     /**
      * GET route tanımla
      * 
@@ -227,6 +233,74 @@ class Router implements RouterInterface
         $method = strtoupper($request->method());
         $uri = '/' . trim($request->path(), '/');
         
+        // Use compiled cache if available (fast path)
+        if ($this->cacheEnabled && $this->cachedCompiledRoutes !== null) {
+            return $this->matchCompiledRoute($method, $uri);
+        }
+        
+        // Fallback to dynamic matching (development mode)
+        return $this->matchDynamicRoute($method, $uri);
+    }
+    
+    /**
+     * Match using compiled routes (fast path - production)
+     * 
+     * @param string $method HTTP method
+     * @param string $uri Request URI
+     * @return Route|null
+     * @throws MethodNotAllowedException
+     */
+    protected function matchCompiledRoute(string $method, string $uri): ?Route
+    {
+        foreach ($this->cachedCompiledRoutes as $compiled) {
+            $match = $compiled->matches($method, $uri);
+            
+            if ($match !== null) {
+                // Reconstruct Route object
+                $route = new Route($compiled->methods, $compiled->uri, $compiled->action);
+                $route = $route->setParameters($match['parameters']);
+                
+                // Apply middleware
+                if (!empty($compiled->middleware)) {
+                    $route = $route->middleware($compiled->middleware);
+                }
+                
+                // Apply name
+                if ($compiled->name) {
+                    $route = $route->name($compiled->name);
+                }
+                
+                return $route;
+            }
+        }
+        
+        // Check if URI matches but method is wrong
+        $allowedMethods = [];
+        foreach ($this->cachedCompiledRoutes as $compiled) {
+            if (preg_match($compiled->regex, $uri)) {
+                $allowedMethods = array_merge($allowedMethods, $compiled->methods);
+            }
+        }
+        
+        if (!empty($allowedMethods)) {
+            throw new MethodNotAllowedException(
+                "Method {$method} not allowed. Allowed methods: " . implode(', ', array_unique($allowedMethods))
+            );
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Match using dynamic routes (development mode)
+     * 
+     * @param string $method HTTP method
+     * @param string $uri Request URI
+     * @return Route|null
+     * @throws MethodNotAllowedException
+     */
+    protected function matchDynamicRoute(string $method, string $uri): ?Route
+    {
         // İlk önce exact match dene (performance)
         $candidateRoutes = $this->routes[$method] ?? [];
         
@@ -351,7 +425,43 @@ class Router implements RouterInterface
     }
     
     /**
-     * Route cache'ini yükle
+     * Load routes from compiled cache
+     * 
+     * @param string $path Cache file path
+     * @return void
+     */
+    public function loadCompiledCache(string $path): void
+    {
+        if (!file_exists($path)) {
+            return;
+        }
+        
+        $cached = require $path;
+        
+        if (!is_array($cached) || !isset($cached['routes'])) {
+            return;
+        }
+        
+        $this->cachedCompiledRoutes = array_map(
+            fn($data) => CompiledRoute::fromArray($data),
+            $cached['routes']
+        );
+        
+        $this->cacheEnabled = true;
+    }
+    
+    /**
+     * Check if cache is enabled
+     * 
+     * @return bool
+     */
+    public function isCached(): bool
+    {
+        return $this->cacheEnabled;
+    }
+    
+    /**
+     * Route cache'ini yükle (legacy method - kept for backward compatibility)
      * 
      * @param string $cacheFile Cache file path
      * @return bool

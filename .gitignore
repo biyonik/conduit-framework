@@ -133,3 +133,6 @@ yarn-error.log*
 # ============================================
 # Keep empty directories
 !.gitkeep
+
+# Temporary test files
+/test_route_cache.php

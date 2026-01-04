@@ -1,0 +1,181 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Conduit\Routing;
+
+/**
+ * Route Compiler
+ * 
+ * Converts route definitions into optimized, cacheable format.
+ * Eliminates runtime regex compilation and parameter extraction.
+ */
+class RouteCompiler
+{
+    /**
+     * Compile all routes to cacheable PHP array
+     * 
+     * @param Router $router
+     * @return array Compiled routes data structure
+     */
+    public function compile(Router $router): array
+    {
+        $routes = $router->getRoutes();
+        $compiled = [
+            'version' => '1.0',
+            'compiled_at' => time(),
+            'routes' => []
+        ];
+        
+        foreach ($routes as $route) {
+            $compiled['routes'][] = $this->compileRoute($route);
+        }
+        
+        return $compiled;
+    }
+    
+    /**
+     * Compile single route
+     */
+    protected function compileRoute(Route $route): array
+    {
+        $uri = $route->getUri();
+        $pattern = $this->compilePattern($uri);
+        $action = $route->getAction();
+        
+        // Serialize action - Closures cannot be cached with var_export
+        // In production, Closures should be avoided or stored as controller references
+        if ($action instanceof \Closure) {
+            $action = 'Closure'; // Mark as closure - will need to be redefined
+        }
+        
+        return [
+            'methods' => $route->getMethods(),
+            'uri' => $uri,
+            'pattern' => $pattern,
+            'regex' => $this->buildRegex($pattern, $route->getConstraints()),
+            'parameters' => $this->extractParameterNames($uri),
+            'action' => $action,
+            'middleware' => $route->getMiddleware(),
+            'name' => $route->getName(),
+            'domain' => $route->getDomain(),
+            'constraints' => $route->getConstraints(),
+        ];
+    }
+    
+    /**
+     * Compile URI pattern
+     * 
+     * Converts /users/{id}/posts/{post?} to pattern with metadata
+     */
+    protected function compilePattern(string $uri): array
+    {
+        $segments = [];
+        $parts = explode('/', trim($uri, '/'));
+        
+        foreach ($parts as $index => $part) {
+            if ($part === '') {
+                continue; // Skip empty parts (from root /)
+            }
+            
+            if (str_starts_with($part, '{') && str_ends_with($part, '}')) {
+                // Parameter segment
+                $param = trim($part, '{}');
+                $optional = str_ends_with($param, '?');
+                $name = rtrim($param, '?');
+                
+                $segments[] = [
+                    'type' => 'parameter',
+                    'name' => $name,
+                    'optional' => $optional,
+                    'position' => $index,
+                ];
+            } else {
+                // Static segment
+                $segments[] = [
+                    'type' => 'static',
+                    'value' => $part,
+                    'position' => $index,
+                ];
+            }
+        }
+        
+        return $segments;
+    }
+    
+    /**
+     * Build optimized regex pattern
+     */
+    protected function buildRegex(array $pattern, array $constraints = []): string
+    {
+        $regex = '^';
+        
+        foreach ($pattern as $segment) {
+            if ($segment['type'] === 'static') {
+                $regex .= '/' . preg_quote($segment['value'], '#');
+            } else {
+                // Parameter - use constraint if available, otherwise default [^/]+
+                $constraint = $constraints[$segment['name']] ?? '[^/]+';
+                $regex .= '/(' . $constraint . ')';
+                
+                if ($segment['optional']) {
+                    // Make the entire /parameter part optional
+                    $regex = substr($regex, 0, -strlen('/(' . $constraint . ')')) . '(?:/(' . $constraint . '))?';
+                }
+            }
+        }
+        
+        $regex .= '$';
+        
+        return '#' . $regex . '#u';
+    }
+    
+    /**
+     * Extract parameter names
+     */
+    protected function extractParameterNames(string $uri): array
+    {
+        preg_match_all('/\{(\w+)\??}/', $uri, $matches);
+        return $matches[1] ?? [];
+    }
+    
+    /**
+     * Save compiled routes to cache file
+     * 
+     * Note: Closure-based routes cannot be fully cached and will be marked as 'Closure'.
+     * For production use, convert Closures to controller methods for full caching support.
+     */
+    public function save(array $compiled, string $path): void
+    {
+        $dir = dirname($path);
+        
+        if (!is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+        
+        $content = '<?php' . PHP_EOL . PHP_EOL;
+        $content .= '// Route cache generated at ' . date('Y-m-d H:i:s') . PHP_EOL;
+        $content .= '// DO NOT EDIT THIS FILE MANUALLY' . PHP_EOL;
+        $content .= '//' . PHP_EOL;
+        $content .= '// Note: Closure-based routes are marked as "Closure" and cannot be fully cached.' . PHP_EOL;
+        $content .= '// Convert to controller methods for production use.' . PHP_EOL . PHP_EOL;
+        $content .= 'return ' . var_export($compiled, true) . ';' . PHP_EOL;
+        
+        $tempFile = $path . '.' . uniqid('', true) . '.tmp';
+        
+        file_put_contents($tempFile, $content, LOCK_EX);
+        
+        // Atomic rename
+        rename($tempFile, $path);
+        
+        // OPcache invalidation
+        if (function_exists('opcache_invalidate')) {
+            opcache_invalidate($path, true);
+        }
+        
+        // Precompile with OPcache
+        if (function_exists('opcache_compile_file')) {
+            opcache_compile_file($path);
+        }
+    }
+}
