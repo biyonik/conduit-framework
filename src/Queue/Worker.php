@@ -83,7 +83,7 @@ class Worker
             $job->jobId = $jobRecord['id'];
             
             // Check max attempts
-            if ($job->attempts > $job->tries()) {
+            if ($job->attempts >= $job->tries()) {
                 throw new MaxAttemptsExceededException(
                     "Job exceeded max attempts: " . get_class($job)
                 );

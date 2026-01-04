@@ -83,12 +83,18 @@ class DatabaseQueue implements QueueInterface
      * Pop the next job from the queue
      * 
      * @param string|null $queue
+     * @param int $retries Internal retry counter to prevent infinite recursion
      * @return array|null
      */
-    public function pop(?string $queue = null): ?array
+    public function pop(?string $queue = null, int $retries = 0): ?array
     {
         $queue = $queue ?? 'default';
         $time = time();
+        
+        // Prevent infinite recursion under high concurrency
+        if ($retries >= 3) {
+            return null;
+        }
         
         // Find available job using raw SQL to avoid Grammar bugs
         $results = $this->db->select(
@@ -113,7 +119,7 @@ class DatabaseQueue implements QueueInterface
         
         // Someone else grabbed it
         if ($affected === 0) {
-            return $this->pop($queue);
+            return $this->pop($queue, $retries + 1);
         }
         
         $job['attempts'] = $job['attempts'] + 1;
@@ -296,6 +302,10 @@ class DatabaseQueue implements QueueInterface
     
     /**
      * Create job payload
+     * 
+     * NOTE: Uses PHP serialization for simplicity. In production environments
+     * with untrusted input, consider using JSON with proper object reconstruction
+     * to avoid potential security vulnerabilities.
      * 
      * @param Job $job
      * @return string

@@ -33,6 +33,10 @@ class SendEmailJob extends Job
     /**
      * Execute the job
      * 
+     * NOTE: In production, validate and sanitize email parameters to prevent
+     * email header injection attacks. Consider using a proper email library
+     * like PHPMailer or Symfony Mailer instead of the mail() function.
+     * 
      * @return void
      */
     public function handle(): void
