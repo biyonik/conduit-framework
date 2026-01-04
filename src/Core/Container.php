@@ -451,4 +451,34 @@ class Container implements ContainerInterface
     {
         $this->bind($key, $value);
     }
+
+    /**
+     * Get all bindings (for compilation)
+     * 
+     * @return array<string, array>
+     */
+    public function getBindings(): array
+    {
+        return $this->bindings;
+    }
+
+    /**
+     * Get all aliases (for compilation)
+     * 
+     * @return array<string, string>
+     */
+    public function getAliases(): array
+    {
+        return $this->aliases;
+    }
+
+    /**
+     * Get singleton instances (for compilation)
+     * 
+     * @return array<string, array>
+     */
+    public function getSingletons(): array
+    {
+        return array_filter($this->bindings, fn($b) => $b['shared']);
+    }
 }

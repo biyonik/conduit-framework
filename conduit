@@ -25,6 +25,8 @@ $console->add(new \Conduit\Console\Commands\RouteCacheCommand());
 $console->add(new \Conduit\Console\Commands\RouteClearCommand());
 $console->add(new \Conduit\Console\Commands\RouteListCommand());
 $console->add(new \Conduit\Console\Commands\ContainerCompileCommand());
+$console->add(new \Conduit\Console\Commands\ContainerClearCommand());
+$console->add(new \Conduit\Console\Commands\BenchmarkCommand());
 $console->add(new \Conduit\Console\Commands\OptimizeCommand());
 $console->add(new \Conduit\Console\Commands\MakeControllerCommand());
 $console->add(new \Conduit\Console\Commands\MakeModelCommand());

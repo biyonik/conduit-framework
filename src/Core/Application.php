@@ -109,14 +109,15 @@ class Application implements ApplicationInterface
      * Application constructor
      * 
      * @param string|null $basePath Application base path
+     * @param string|null $containerClass Container class to use (defaults to Container)
      */
-    public function __construct(?string $basePath = null)
+    public function __construct(?string $basePath = null, ?string $containerClass = null)
     {
         if ($basePath) {
             $this->setBasePath($basePath);
         }
 
-        $this->registerBaseBindings();
+        $this->registerBaseBindings($containerClass);
         $this->registerBaseServiceProviders();
         $this->registerCoreContainerAliases();
         
@@ -223,11 +224,26 @@ class Application implements ApplicationInterface
     /**
      * Core binding'leri kaydet
      * 
+     * @param string|null $containerClass Container class to use
      * @return void
      */
-    protected function registerBaseBindings(): void
+    protected function registerBaseBindings(?string $containerClass = null): void
     {
-        $this->container = new Container();
+        // Use specified container class or default to Container
+        $containerClass = $containerClass ?? Container::class;
+        
+        // Validate container class
+        if (!class_exists($containerClass)) {
+            throw new \InvalidArgumentException("Container class does not exist: {$containerClass}");
+        }
+        
+        if (!is_subclass_of($containerClass, ContainerInterface::class) && $containerClass !== Container::class) {
+            throw new \InvalidArgumentException(
+                "Container class must implement ContainerInterface: {$containerClass}"
+            );
+        }
+        
+        $this->container = new $containerClass();
         
         // Container'ı kendisine bind et (singleton)
         $this->container->instance(Container::class, $this->container);
