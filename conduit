@@ -33,6 +33,12 @@ $console->add(new \Conduit\Console\Commands\MakeModelCommand());
 $console->add(new \Conduit\Console\Commands\MakeMiddlewareCommand());
 $console->add(new \Conduit\Console\Commands\MakeCommandCommand());
 
+// Queue commands
+$console->add(new \Conduit\Console\Commands\QueueWorkCommand());
+$console->add(new \Conduit\Console\Commands\QueueRetryCommand());
+$console->add(new \Conduit\Console\Commands\QueueFailedCommand());
+$console->add(new \Conduit\Console\Commands\QueueClearCommand());
+
 // User commands
 $userCommandsPath = $app->basePath('app/Console/Commands');
 if (is_dir($userCommandsPath)) {

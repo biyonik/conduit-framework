@@ -7,6 +7,7 @@
  */
 
 use Conduit\Routing\Router;
+use Conduit\Queue\QueueController;
 
 /** @var Router $router */
 $router = app(Router::class);
@@ -75,4 +76,10 @@ $router->group(['prefix' => 'api'], function (Router $router) {
             ]
         ];
     })->name('api.posts.comments');
+});
+
+// Queue processing endpoints (protected by token)
+$router->group(['prefix' => 'queue'], function (Router $router) {
+    $router->match(['GET', 'POST'], '/process', [QueueController::class, 'process'])->name('queue.process');
+    $router->get('/stats', [QueueController::class, 'stats'])->name('queue.stats');
 });
