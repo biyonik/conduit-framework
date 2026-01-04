@@ -192,6 +192,27 @@ class Connection implements ConnectionInterface
     }
 
     /**
+     * Execute a select query and return the first result
+     *
+     * @param string $query SQL query
+     * @param array<mixed> $bindings Query bindings
+     * @return array|null First result or null if no results
+     * @throws QueryException
+     * @throws ConnectionException
+     */
+    public function selectOne(string $query, array $bindings = []): ?array
+    {
+        try {
+            $statement = $this->getPdo()->prepare($query);
+            $statement->execute($bindings);
+            $result = $statement->fetch();
+            return $result === false ? null : $result;
+        } catch (PDOException $e) {
+            throw $this->createQueryException($e, $query, $bindings);
+        }
+    }
+
+    /**
      * {@inheritdoc}
      * @throws QueryException
      * @throws ConnectionException
