@@ -51,23 +51,31 @@
         </style>
     </head>
     <body>
-        <h2>Rate Limiter (Tests\Unit\RateLimiter\RateLimiter)</h2>
-        <ul>
-            <li class="success">Clear</li>
-            <li class="success">Remaining</li>
-            <li class="success">Attempt allows within limit</li>
-            <li class="success">Attempt blocks when exceeded</li>
-            <li class="success">Retry after</li>
-            <li class="success">Available in</li>
-            <li class="success">Too many attempts</li>
-        </ul>
         <h2>Array Storage (Tests\Unit\RateLimiter\Storage\ArrayStorage)</h2>
         <ul>
             <li class="success">Forget removes key</li>
-            <li class="success">Cleanup removes expired entries</li>
-            <li class="success">Increment increments existing</li>
             <li class="success">Get returns null for non existent key</li>
             <li class="success">Increment creates new entry</li>
+            <li class="success">Cleanup removes expired entries</li>
+            <li class="success">Increment increments existing</li>
+        </ul>
+        <h2>Rate Limiter Integration (Tests\Unit\RateLimiter\RateLimiterIntegration)</h2>
+        <ul>
+            <li class="success">Different users independent limits</li>
+            <li class="success">File storage persistence</li>
+            <li class="success">Login brute force protection</li>
+            <li class="success">Clearing specific user limit</li>
+            <li class="success">Api rate limiting scenario</li>
+        </ul>
+        <h2>Rate Limiter (Tests\Unit\RateLimiter\RateLimiter)</h2>
+        <ul>
+            <li class="success">Attempt allows within limit</li>
+            <li class="success">Available in</li>
+            <li class="success">Too many attempts</li>
+            <li class="success">Retry after</li>
+            <li class="success">Remaining</li>
+            <li class="success">Attempt blocks when exceeded</li>
+            <li class="success">Clear</li>
         </ul>
     </body>
 </html>
