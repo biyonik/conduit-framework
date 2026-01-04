@@ -1,0 +1,16 @@
+Rate Limiter (Tests\Unit\RateLimiter\RateLimiter)
+ [x] Clear
+ [x] Too many attempts
+ [x] Attempt blocks when exceeded
+ [x] Available in
+ [x] Retry after
+ [x] Remaining
+ [x] Attempt allows within limit
+
+Array Storage (Tests\Unit\RateLimiter\Storage\ArrayStorage)
+ [x] Increment creates new entry
+ [x] Cleanup removes expired entries
+ [x] Forget removes key
+ [x] Get returns null for non existent key
+ [x] Increment increments existing
+

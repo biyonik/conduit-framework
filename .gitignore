@@ -136,3 +136,10 @@ yarn-error.log*
 
 # Temporary test files
 /test_route_cache.php
+demo-*.php
+
+# ============================================
+# Rate Limiter Storage
+# ============================================
+/storage/framework/ratelimiter/*
+!/storage/framework/ratelimiter/.gitkeep
