@@ -35,16 +35,26 @@ class Request implements RequestInterface
 {
     use InteractsWithInput;
     use InteractsWithHeaders;
-    
+
     /**
      * HTTP method
      */
     private string $method;
-    
+
     /**
      * Request URI
      */
     private UriInterface $uri;
+
+    /**
+     * Trusted proxy IP addresses
+     *
+     * SECURITY: Only set this for proxies you control!
+     * Configure in bootstrap: $request->setTrustedProxies(['10.0.0.1']);
+     *
+     * @var array<string>
+     */
+    protected array $trustedProxies = [];
     
     /**
      * Protocol version
@@ -564,14 +574,63 @@ class Request implements RequestInterface
     }
     
     /**
-     * Get client IP address
-     * 
-     * @param bool $checkProxy Check proxy headers?
+     * Set trusted proxy IP addresses
+     *
+     * SECURITY: Only set this for proxies you control!
+     *
+     * @param array<string> $proxies Trusted proxy IPs
+     * @return self
+     */
+    public function setTrustedProxies(array $proxies): self
+    {
+        $this->trustedProxies = $proxies;
+        return $this;
+    }
+
+    /**
+     * Get trusted proxies
+     *
+     * @return array<string>
+     */
+    public function getTrustedProxies(): array
+    {
+        return $this->trustedProxies;
+    }
+
+    /**
+     * Check if request comes from a trusted proxy
+     *
+     * @return bool
+     */
+    protected function isFromTrustedProxy(): bool
+    {
+        $remoteAddr = $this->serverParams['REMOTE_ADDR'] ?? null;
+
+        if ($remoteAddr === null) {
+            return false;
+        }
+
+        // If no trusted proxies configured, don't trust proxy headers
+        if (empty($this->trustedProxies)) {
+            return false;
+        }
+
+        return in_array($remoteAddr, $this->trustedProxies, true);
+    }
+
+    /**
+     * Get client IP address with trusted proxy support
+     *
+     * SECURITY FIX: Only trusts proxy headers if request comes from configured trusted proxy
+     * This prevents IP spoofing attacks
+     *
+     * @param bool $checkProxy Check proxy headers? (deprecated, always checks if trusted)
      * @return string
      */
     public function ip(bool $checkProxy = true): string
     {
-        if ($checkProxy) {
+        // SECURITY: Only trust proxy headers if request is from trusted proxy
+        if ($this->isFromTrustedProxy()) {
             // Check proxy headers (in order of trust)
             $proxyHeaders = [
                 'HTTP_X_REAL_IP',
@@ -579,20 +638,24 @@ class Request implements RequestInterface
                 'HTTP_X_FORWARDED',
                 'HTTP_X_CLUSTER_CLIENT_IP',
                 'HTTP_CLIENT_IP',
+                'HTTP_CF_CONNECTING_IP', // Cloudflare
             ];
-            
+
             foreach ($proxyHeaders as $header) {
                 $ip = $this->serverParams[$header] ?? null;
                 if ($ip) {
                     // X-Forwarded-For can contain multiple IPs, take first
                     $ip = trim(explode(',', $ip)[0]);
+
+                    // Validate IP and reject private/reserved ranges
                     if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
                         return $ip;
                     }
                 }
             }
         }
-        
+
+        // Fallback to direct connection IP
         return $this->serverParams['REMOTE_ADDR'] ?? '127.0.0.1';
     }
     

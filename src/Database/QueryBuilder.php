@@ -794,16 +794,40 @@ class QueryBuilder implements QueryBuilderInterface
     }
 
     /**
-     * Raw SQL expression
+     * Raw SQL expression (DEPRECATED - Use with extreme caution!)
      *
-     * DIKKAT: SQL injection riski! Sadece güvenilir değerler için kullan.
+     * SECURITY WARNING: This method is deprecated due to SQL injection risks!
+     * Only use for trusted, hardcoded queries. Never use with user input!
      *
+     * Recommended alternatives:
+     * - Use QueryBuilder methods (where, join, etc.)
+     * - Use prepared statements with bindings
+     * - Create a custom Grammar method for complex queries
+     *
+     * @deprecated 1.0.0 Use QueryBuilder methods instead
      * @param string $sql Raw SQL
-     * @param array $bindings Bindings
+     * @param array $bindings Bindings for prepared statement
      * @return array
+     * @throws \RuntimeException If used in production without explicit flag
      */
     public function raw(string $sql, array $bindings = []): array
     {
+        // SECURITY: Log warning in development
+        if (getenv('APP_ENV') !== 'testing') {
+            trigger_error(
+                'QueryBuilder::raw() is deprecated and dangerous. Use QueryBuilder methods instead.',
+                E_USER_DEPRECATED
+            );
+        }
+
+        // SECURITY: Prevent raw SQL in production unless explicitly allowed
+        if (getenv('APP_ENV') === 'production' && getenv('ALLOW_RAW_SQL') !== 'true') {
+            throw new \RuntimeException(
+                'Raw SQL queries are disabled in production for security. ' .
+                'Use QueryBuilder methods or set ALLOW_RAW_SQL=true in .env (not recommended).'
+            );
+        }
+
         return $this->connection->select($sql, $bindings);
     }
 

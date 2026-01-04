@@ -20,6 +20,8 @@ class MySQLGrammar extends Grammar
      * {@inheritdoc}
      *
      * MySQL kullanır backticks: `column_name`
+     *
+     * SECURITY: SQL Injection koruması ile validate edilir
      */
     public function wrap(string $value): string
     {
@@ -33,19 +35,40 @@ class MySQLGrammar extends Grammar
             return $value;
         }
 
-        // Table.column formatını handle et
-        if (str_contains($value, '.')) {
-            $parts = explode('.', $value);
-            return implode('.', array_map(fn($part) => "`{$part}`", $parts));
-        }
-
-        // AS alias handling
-        if (str_contains($value, ' as ')) {
-            [$column, $alias] = explode(' as ', strtolower($value), 2);
+        // AS alias handling (önce parse et, sonra her parçayı validate et)
+        if (stripos($value, ' as ') !== false) {
+            [$column, $alias] = preg_split('/\s+as\s+/i', $value, 2);
             return $this->wrap(trim($column)) . ' AS ' . $this->wrap(trim($alias));
         }
 
-        return "`{$value}`";
+        // Table.column formatını handle et
+        if (str_contains($value, '.')) {
+            $parts = explode('.', $value);
+            return implode('.', array_map(fn($part) => $this->wrapSegment($part), $parts));
+        }
+
+        return $this->wrapSegment($value);
+    }
+
+    /**
+     * Wrap a single segment with SQL injection protection
+     *
+     * @param string $segment Column or table name segment
+     * @return string Wrapped and validated segment
+     * @throws \InvalidArgumentException If segment contains invalid characters
+     */
+    protected function wrapSegment(string $segment): string
+    {
+        // Validate column/table name - only allow alphanumeric and underscore
+        // This prevents SQL injection through column names
+        if (!preg_match('/^[a-zA-Z0-9_]+$/', $segment)) {
+            throw new \InvalidArgumentException(
+                "Invalid column or table name: '{$segment}'. " .
+                "Only alphanumeric characters and underscores are allowed."
+            );
+        }
+
+        return "`{$segment}`";
     }
 
     /**
